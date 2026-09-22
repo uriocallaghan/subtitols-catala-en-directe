@@ -77,7 +77,11 @@ veu → cinta de 6 s → presa de 4 s → Parakeet català al Mac (Metal)
 ```
 
 Tres perfils de lectura — **Fiable / Equilibrat / Immediat** — regulen la calma contra la
-rapidesa. Documentació completa:
+rapidesa. I tres maneres de mirar-lo: tema fosc, paper a tota l'amplada, degradat per antiguitat.
+
+<img src="assets/features.jpg" alt="Subtítol Live: tema fosc, mode ample i degradat per antiguitat" width="100%">
+
+Documentació completa:
 
 - [Com funciona](docs/COM-FUNCIONA.md) — el producte explicat sense codi.
 - [El model i la tecnologia](docs/EL-MODEL.md) — NVIDIA → BSC/Aina → GGUF al Mac.
