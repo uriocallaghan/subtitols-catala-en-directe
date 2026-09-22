@@ -61,6 +61,7 @@ if [[ -d "$runtime_source_directory" ]]; then
     for library in $runtime_libraries; do
         cp -L "$runtime_source_directory/build/metal-asr/bin/$library" "$runtime_directory/$library"
     done
+    cp "$runtime_source_directory/include/nemo_speech/asr.h" "$runtime_directory/include/nemo_speech/asr.h"
     cd "$package_directory"
 fi
 

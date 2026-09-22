@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "../../../.work/NeMo-Speech.cpp/include/nemo_speech/asr.h"
+#include "../../Vendor/Runtime/include/nemo_speech/asr.h"
 
 struct stl_engine {
     nemo_speech_asr_recognizer* recognizer;
