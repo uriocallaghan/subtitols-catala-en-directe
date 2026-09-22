@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "artifact": {
+    "filename": "catalan-parakeet-q8.gguf",
+    "sha256": "3b7829f2f292545b79e0195dd5f75b0c8ff9c467dc9f3c18ff558181605e55a0",
+    "quantization": "Q8_0"
+  },
+  "origin": {
+    "checkpoint": null,
+    "revision": null,
+    "status": "unknown-must-be-recovered-before-model-comparison"
+  },
+  "conversion": {
+    "tool": "NeMo-Speech.cpp",
+    "configuration": null,
+    "status": "historical-conversion-configuration-not-recorded"
+  },
+  "decoder": {
+    "architecture": "RNNT",
+    "mode": "offline-full-context",
+    "confidence": "unavailable-constant-1.0-is-not-exposed"
+  },
+  "evaluation": {
+    "corpus": "synthetic-catalan-audit-2026-08-30",
+    "notes": "Current baseline only. A replacement requires a reproducible corpus, at least 10% relative WER improvement, fewer non-speech insertions, and no material latency regression."
+  }
+}

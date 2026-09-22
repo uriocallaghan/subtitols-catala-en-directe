@@ -1,0 +1,16 @@
+.DS_Store
+
+# Models i runtime local (no es commitegen: 1,1 GB i arbre de build)
+models/
+*.gguf
+.work/
+
+# Builds Swift i bundles
+SubtitolLive/.build/
+SubtitolLive/build/
+
+# Diagnòstics opcionals (àudio de sessió)
+diagnostics/
+
+# Assets de treball
+*.tmp
