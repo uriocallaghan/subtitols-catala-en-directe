@@ -1,0 +1,273 @@
+diff --git a/conversion/asr.py b/conversion/asr.py
+index 08702fd..b5fcd54 100644
+--- a/conversion/asr.py
++++ b/conversion/asr.py
+@@ -172,6 +172,7 @@ KEY_ENC_D_FF = f"{ARCH}.encoder.d_ff"
+ KEY_ENC_CONV_KERNEL = f"{ARCH}.encoder.conv_kernel_size"
+ KEY_ENC_SUBSAMPLE = f"{ARCH}.encoder.subsampling_factor"
+ KEY_ENC_SUBSAMPLE_CONV_CHANNELS = f"{ARCH}.encoder.subsampling_conv_channels"
++KEY_ENC_SUBSAMPLING = f"{ARCH}.encoder.subsampling"
+ KEY_ENC_FEAT_IN = f"{ARCH}.encoder.feat_in"
+ KEY_ENC_XSCALING = f"{ARCH}.encoder.xscaling"
+ KEY_ENC_USE_BIAS = f"{ARCH}.encoder.use_bias"
+@@ -369,6 +370,7 @@ def convert(
+     head_override: Optional[str],
+     weight_type: str = "q8_0",
+     q8_layout: str = "block",
++    embed_pe: bool = True,
+ ) -> None:
+     if weight_type not in WEIGHT_TYPES:
+         raise ValueError(
+@@ -422,6 +424,12 @@ def convert(
+         conv_kernel = int(enc_cfg["conv_kernel_size"])
+         subsample = int(enc_cfg.get("subsampling_factor", 8))
+         subsample_conv_channels = int(enc_cfg.get("subsampling_conv_channels", 256))
++        # NeMo uses -1 to mean "as many channels as d_model" (classic Conformer).
++        if subsample_conv_channels == -1:
++            subsample_conv_channels = d_model
++        subsampling = str(enc_cfg.get("subsampling", "dw_striding"))
++        if subsampling not in ("dw_striding", "striding"):
++            raise ValueError(f"unsupported encoder subsampling: {subsampling}")
+         feat_in = int(enc_cfg["feat_in"])
+         xscaling = bool(enc_cfg.get("xscaling", True))
+         use_bias = bool(enc_cfg.get("use_bias", True))
+@@ -459,7 +467,8 @@ def convert(
+             cache_supported = False
+ 
+         conv_norm = str(enc_cfg.get("conv_norm_type", "batch_norm"))
+-        conv_context = str(enc_cfg.get("conv_context_size", "symmetric"))
++        # Classic Conformer configs leave conv_context_size as null.
++        conv_context = str(enc_cfg.get("conv_context_size") or "symmetric")
+         att_context_style = str(enc_cfg.get("att_context_style", "regular"))
+         cache_supported = cache_supported and att_context_style != "regular"
+ 
+@@ -546,6 +555,7 @@ def convert(
+         gw.add_uint32(KEY_ENC_CONV_KERNEL, conv_kernel)
+         gw.add_uint32(KEY_ENC_SUBSAMPLE, subsample)
+         gw.add_uint32(KEY_ENC_SUBSAMPLE_CONV_CHANNELS, subsample_conv_channels)
++        gw.add_string(KEY_ENC_SUBSAMPLING, subsampling)
+         gw.add_uint32(KEY_ENC_FEAT_IN, feat_in)
+         gw.add_bool(KEY_ENC_XSCALING, xscaling)
+         gw.add_bool(KEY_ENC_USE_BIAS, use_bias)
+@@ -629,8 +639,10 @@ def convert(
+         # ---- Positional encoding (analytical) ----
+         # Always emit as F32; it's a relatively small lookup table that the
+         # encoder slices by position at runtime.
+-        pe = build_pe(d_model, pe_max_len)
+-        gw.add_tensor("encoder.pos_enc.pe", pe, raw_dtype=GGMLQuantizationType.F32)
++        # Optional: the runtime can rebuild this deterministic table at load time.
++        if embed_pe:
++            pe = build_pe(d_model, pe_max_len)
++            gw.add_tensor("encoder.pos_enc.pe", pe, raw_dtype=GGMLQuantizationType.F32)
+ 
+         # ---- Mel filterbank (Slaney-normalized) ----
+         # Match NeMo's Slaney-normalized filterbank. The runtime's analytical
+@@ -638,18 +650,25 @@ def convert(
+         fb_sr = int(pp_cfg.get("sample_rate", 16000))
+         fb_n_fft = int(pp_cfg.get("n_fft", 512))
+         fb_n_mels = int(pp_cfg.get("features", feat_in))
++        # Prefer the checkpoint's own filterbank: it is exactly what the model
++        # was trained with. librosa only reconstructs it.
++        ckpt_fb = sd.get("preprocessor.featurizer.fb")
+         try:
+-            import librosa  # type: ignore
+-
+-            fb = librosa.filters.mel(
+-                sr=fb_sr,
+-                n_fft=fb_n_fft,
+-                n_mels=fb_n_mels,
+-                fmin=0.0,
+-                fmax=fb_sr / 2.0,
+-                norm="slaney",
+-                htk=False,
+-            ).astype(np.float32)
++            if ckpt_fb is not None:
++                fb = ckpt_fb.detach().cpu().numpy().reshape(fb_n_mels, fb_n_fft // 2 + 1).astype(np.float32)
++                print("[convert] mel filterbank taken from the checkpoint")
++            else:
++                import librosa  # type: ignore
++
++                fb = librosa.filters.mel(
++                    sr=fb_sr,
++                    n_fft=fb_n_fft,
++                    n_mels=fb_n_mels,
++                    fmin=0.0,
++                    fmax=fb_sr / 2.0,
++                    norm="slaney",
++                    htk=False,
++                ).astype(np.float32)
+         except ImportError:
+             print(
+                 "WARN: librosa not installed; skipping asr.preprocessor.fb. "
+diff --git a/conversion/registry.py b/conversion/registry.py
+index 55df2cd..d0c725c 100644
+--- a/conversion/registry.py
++++ b/conversion/registry.py
+@@ -29,6 +29,7 @@ class ConversionRequest:
+     local_transformer_outtype: str | None = None
+     silero_version: str = "6.2.0"
+     from_whisper_ggml: Path | None = None
++    embed_pe: bool = True
+ 
+ 
+ def _architecture_from_config(config: dict) -> str:
+@@ -164,6 +165,7 @@ def convert_model(request: ConversionRequest) -> str:
+             request.head_type,
+             "fp16" if outtype == "f16" else outtype,
+             request.q8_layout,
++            request.embed_pe,
+         )
+     elif architecture == "diarization":
+         from . import diarization
+diff --git a/convert_model.py b/convert_model.py
+index 0a88e0d..48a0ae0 100644
+--- a/convert_model.py
++++ b/convert_model.py
+@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
+     parser.add_argument(
+         "--max-seq-length", type=int, default=128, help="PnC inference window length"
+     )
++    parser.add_argument(
++        "--no-embed-pe",
++        dest="embed_pe",
++        action="store_false",
++        help="ASR: omit the positional-encoding table; the runtime rebuilds it at load time",
++    )
+     parser.add_argument("--metadata-json", type=Path, help="write converter metadata JSON")
+     parser.add_argument(
+         "--local-transformer-outtype",
+@@ -76,6 +82,7 @@ def main() -> int:
+         local_transformer_outtype=args.local_transformer_outtype,
+         silero_version=args.silero_version,
+         from_whisper_ggml=args.from_whisper_ggml,
++        embed_pe=args.embed_pe,
+     )
+     try:
+         architecture = convert_model(request)
+diff --git a/src/asr/encoder/fastconformer.cpp b/src/asr/encoder/fastconformer.cpp
+index ec039c8..7c18847 100644
+--- a/src/asr/encoder/fastconformer.cpp
++++ b/src/asr/encoder/fastconformer.cpp
+@@ -76,6 +76,10 @@ SubSampling::SubSampling(const std::string& name, const EncoderConfig& cfg)
+     // Symmetric path keeps Conv2D's internal padding=1. Causal path uses
+     // padding=0 + explicit asymmetric pad in build_graph.
+     const int padding = causal ? 0 : 1;
++    // The causal pad heuristic in build_graph only knows the dw_striding layout.
++    if (causal && cfg.subsampling_type == SubsamplingType::Striding) {
++        throw std::runtime_error("causal striding subsampling is not supported");
++    }
+ 
+     conv_ = new ggml_runtime::SequenceModule(name_ + ".conv");
+     int in_channels = 1;
+@@ -92,8 +96,21 @@ SubSampling::SubSampling(const std::string& name, const EncoderConfig& cfg)
+         new ggml_runtime::ReLU(name_ + ".conv." + std::to_string(layer_index)));
+     layer_index++;
+ 
+-    // (sampling_num - 1) repeats of [Conv2dDW, Conv2d 1x1, ReLU]
+-    for (int i = 0; i < sampling_num - 1; i++) {
++    // Classic Conformer `striding`: (sampling_num - 1) repeats of [Conv2d, ReLU].
++    for (int i = 0; cfg.subsampling_type == SubsamplingType::Striding && i < sampling_num - 1;
++         i++) {
++        conv_->modules.push_back(new ggml_runtime::Conv2D(
++            name_ + ".conv." + std::to_string(layer_index), in_channels, conv_channels,
++            kernel_size, stride, padding));
++        layer_index++;
++        conv_->modules.push_back(
++            new ggml_runtime::ReLU(name_ + ".conv." + std::to_string(layer_index)));
++        layer_index++;
++    }
++
++    // FastConformer `dw_striding`: (sampling_num - 1) repeats of [Conv2dDW, Conv2d 1x1, ReLU]
++    for (int i = 0; cfg.subsampling_type == SubsamplingType::DwStriding && i < sampling_num - 1;
++         i++) {
+         conv_->modules.push_back(new ggml_runtime::Conv2DDW(
+             name_ + ".conv." + std::to_string(layer_index), in_channels, in_channels, kernel_size,
+             stride, padding));
+diff --git a/src/asr/encoder/fastconformer.h b/src/asr/encoder/fastconformer.h
+index e21b860..2c7ab06 100644
+--- a/src/asr/encoder/fastconformer.h
++++ b/src/asr/encoder/fastconformer.h
+@@ -35,6 +35,11 @@ enum class ConvNorm { BatchNorm, LayerNorm };
+ // conv state of `kernel-1` past frames to bridge chunk boundaries.
+ enum class ConvContext { Symmetric, Causal };
+ 
++// Conv2D front end before the Conformer layers. FastConformer uses
++// `dw_striding` (depthwise + pointwise stages, typically 8x). Classic
++// Conformer uses `striding`: log2(factor) full Conv2d(k3, s2) + ReLU stages.
++enum class SubsamplingType { DwStriding, Striding };
++
+ // Whether the encoder threads K/V/conv state across calls.
+ enum class CacheMode { Disabled, Enabled };
+ 
+@@ -46,6 +51,7 @@ struct EncoderConfig {
+     int conv_kernel_size = 9;
+     int subsampling_factor = 8;
+     int subsampling_conv_channels = 256;
++    SubsamplingType subsampling_type = SubsamplingType::DwStriding;
+     int feat_in = 80;  // mel bins
+     int pos_emb_max_len = 5000;
+     bool xscaling = true;
+@@ -77,10 +83,10 @@ struct EncoderConfig {
+     int offline_left_ctx = -1;
+     int offline_right_ctx = -1;
+ 
+-    // Output length after subsampling at feat_in==80, factor 8.
++    // Feature-axis length after symmetric subsampling.
+     int subsample_out_length() const {
+         int len = feat_in;
+-        const int n_stages = 3;                                  // log2(8)
++        const int n_stages = static_cast<int>(std::log2(subsampling_factor));
+         for (int i = 0; i < n_stages; i++) len = (len + 1) / 2;  // ceil-div
+         return len;
+     }
+diff --git a/src/asr/encoder/rel_pos_attention.cpp b/src/asr/encoder/rel_pos_attention.cpp
+index f7fceda..bd586dd 100644
+--- a/src/asr/encoder/rel_pos_attention.cpp
++++ b/src/asr/encoder/rel_pos_attention.cpp
+@@ -116,7 +116,26 @@ RelPositionalEncoding::set_data(Session* session) {
+     }
+     std::vector<char> buffer(data_size);
+     if (!session->params.pe_bin_path || session->params.pe_bin_path[0] == '\0') {
+-        GGMLF_LOG_ERROR("pos_enc: no GGUF pe tensor and no pe_bin_path set");
++        // The table is a pure function of (d_model, max_len), so a GGUF may omit it
++        // (convert_model.py --no-embed-pe) to save 4 * d_model * (2 * max_len - 1)
++        // bytes. Mirror NeMo's float32 construction: the argument pos * div_term is
++        // rounded to float before sin/cos, exactly as torch does.
++        const int rows = max_len * 2 - 1;
++        std::vector<float> table(static_cast<size_t>(rows) * d_model);
++        const float scale = -(std::log(10000.0f) / static_cast<float>(d_model));
++        for (int row = 0; row < rows; ++row) {
++            const float position = static_cast<float>(max_len - 1 - row);
++            float* out = table.data() + static_cast<size_t>(row) * d_model;
++            for (int i = 0; i < d_model; i += 2) {
++                const float div_term = std::exp(static_cast<float>(i) * scale);
++                const float argument = position * div_term;
++                out[i] = static_cast<float>(std::sin(static_cast<double>(argument)));
++                if (i + 1 < d_model) {
++                    out[i + 1] = static_cast<float>(std::cos(static_cast<double>(argument)));
++                }
++            }
++        }
++        ggml_backend_tensor_set(pe_tensor.tensor, table.data(), 0, data_size);
+         return;
+     }
+     auto file = ggml_fopen(session->params.pe_bin_path, "rb");
+diff --git a/src/asr/model.cpp b/src/asr/model.cpp
+index cac4953..6425d97 100644
+--- a/src/asr/model.cpp
++++ b/src/asr/model.cpp
+@@ -1164,6 +1164,14 @@ load_encoder_cfg(const ggml_runtime::GGUFLoader& loader, const std::string& A) {
+         loader.get_u32(A + ".encoder.subsampling_factor", cfg.subsampling_factor);
+     cfg.subsampling_conv_channels =
+         loader.get_u32(A + ".encoder.subsampling_conv_channels", cfg.subsampling_conv_channels);
++    // Absent in GGUFs that predate classic Conformer support: those are all dw_striding.
++    const std::string subsampling = loader.get_str(A + ".encoder.subsampling", "dw_striding");
++    if (subsampling == "striding")
++        cfg.subsampling_type = SubsamplingType::Striding;
++    else if (subsampling == "dw_striding")
++        cfg.subsampling_type = SubsamplingType::DwStriding;
++    else
++        throw std::runtime_error("unsupported encoder subsampling: " + subsampling);
+     cfg.feat_in = loader.get_u32(A + ".encoder.feat_in", cfg.feat_in);
+     cfg.pos_emb_max_len = loader.get_u32(A + ".encoder.pos_emb_max_len", cfg.pos_emb_max_len);
+     cfg.xscaling = loader.get_bool(A + ".encoder.xscaling", cfg.xscaling);

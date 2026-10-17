@@ -58,14 +58,14 @@ Sense micròfon, no hi ha producte.
 
 ### 3. Comences (clic o espai)
 
-El micròfon omple un **buffer**, com una cinta que sempre guarda els últims 6 segons i va esborrant el que és més vell.
+El micròfon omple un **buffer**, com una cinta que sempre guarda els últims 7 segons i va esborrant el que és més vell.
 L’àudio no es desa a disc.
 Quan atures, la cinta es buida.
 
 ### 4. Cada pocs instants, una “presa” nova
 
 El model no escolta paraula a paraula, com un stenògraf.
-Agafa els **últims 4 segons** sencers i torna a endevinar tot aquell tros.
+Agafa els **últims 7 segons** sencers i torna a endevinar tot aquell tros. Amb menys context, el nostre model s’equivoca més: va aprendre amb frases llargues.
 
 És com si, cada 200 o 300 mil·lisegons, reenviessis el mateix pla a un revisor i ell et tornés un subtítol nou de tot el pla.
 (Un mil·lisegon és una mil·lèsima de segon. 300 ms és un parpelleig lent.)
@@ -80,13 +80,15 @@ Cada esborrany nou es compara amb els anteriors.
 
 - Una paraula que el model ha dit **diverses vegades seguides**, i que ja té una mica d’edat, es **bloqueja**. Ja no es mourà.
 - Les **últimes 3 paraules** (com a molt) queden a la **cua viva**. Encara poden canviar.
+- Després, el **corrector** posa signes, majúscules i xifres a les paraules bloquejades. Per decidir-ho, espera a sentir tres paraules més, o que facis una pausa. Fins aleshores, la paraula també és a la cua viva.
+- Una paraula passa al **text estable** només quan ja té la forma definitiva. Així la pantalla la col·loca una sola vegada, ja puntuada.
 
 El text bloquejat és el que el lector està llegint.
 La cua viva és l’equivalent al “draft” vermell d’un teleprompter: existeix, però no t’hi has de fiar del tot.
 
 ### 6. Atures
 
-L’app fa **un últim passi** sobre els 6 segons reals del final.
+L’app fa **un últim passi** sobre els 7 segons reals del final.
 Com un color grade ràpid al tancament: pot corregir la cua una sola vegada.
 El text que ja estava bloquejat no es reescriu sencer.
 
@@ -100,15 +102,15 @@ Això és el que veus, encara que no es dibuixi amb dos colors.
 
 | Capa | Què és | Es pot canviar? |
 |---|---|---|
-| **Text estable** | El que ja has pogut llegir | No, mentre graves |
-| **Cua viva** | Les últimes paraules, com a molt 3 | Sí, si el model canvia d’idea |
+| **Text estable** | El que ja has pogut llegir, ja puntuat | No, mentre graves |
+| **Cua viva** | Les últimes paraules: les que el model encara pot corregir (com a molt 3) i les que esperen el signe (unes 3 més) | Sí: una correcció del model, o el signe i la majúscula quan arriben |
 
 Per què com a molt 3?
 Perquè una cua llarga és un subtítol que encara s’està reescrivint.
 El lector no sap on mirar.
 
 Si una paraula estable canviés, seria com si en un SRT ja publicat et reescrivissin una línia que l’espectador ja ha llegit.
-Això, l’app intenta no fer-ho mai.
+Això, l’app no ho fa: en les gravacions de prova, el text estable no canvia de línia ni una sola vegada ([Lectura còmoda](LECTURA.md)).
 
 ---
 
@@ -120,8 +122,8 @@ El perfil es desa. No canvia a mitja sessió.
 
 | Perfil | Sensació | Quan té sentit |
 |---|---|---|
-| **Fiable** (defecte) | El text triga un pèl més, però gairebé no ballen les paraules | Lectura, accessibilitat, prova davant de gent |
-| **Equilibrat** | Compromís | Ús de cada dia |
+| **Fiable** (defecte) | El text triga un pèl més, però gairebé no ballen les paraules, i una paraula que el motor no sent igual tres cops seguits no surt mai | Lectura, accessibilitat, prova davant de gent |
+| **Equilibrat** | Mostra la cua abans, fixa amb la mateixa calma que Fiable | Ús de cada dia |
 | **Immediat** | Les paraules surten abans, i la cua viva es nota més | Si vols “sentir” el directe i acceptes més correccions |
 
 No són tres models diferents.
@@ -130,8 +132,12 @@ No són tres models diferents.
 Objectius aproximats de retard visible (de la paraula dita a la paraula estable a pantalla):
 
 - Fiable: uns 1,2 segons
-- Equilibrat: uns 0,8 segons
+- Equilibrat: uns 1,2 segons (la cua es veu abans, cap a 0,8 s)
 - Immediat: uns 0,5 segons
+
+Fiable i Equilibrat prefereixen callar a inventar: en una sala amb públic, on el motor
+sent malament, deixen forats en lloc d'escriure paraules que ningú no ha dit
+(`docs/AUDITORIA-PARAULES-INVENTADES.md`).
 
 Mig segon extra de calma sovint val més que mig segon de velocitat.
 Això és una decisió de lectura, no d’enginyeria.
@@ -147,6 +153,11 @@ Text gran, Inter Medium, ancorat a baix.
 Les línies noves neixen a la part inferior i el bloc puja, com un teleprompter o un roll-up de subtítols de televisió.
 El text que ja és estable **no es desplaça quan la cua viva es corregeix**.
 Només puja quan entra una línia nova de veritat.
+
+**Paràgrafs.** Quan acabes una frase i fas una pausa de mig segon o més, la frase següent comença en una línia nova, a l’esquerra.
+Si calles un segon o més, també hi ha línia nova, encara que no hagis acabat la frase: el lector veu que t’has aturat.
+La pausa es mesura al micròfon: és el silenci real, igual amb qualsevol model de veu.
+Quan deixes de parlar, en mig segon les últimes paraules ja reben el punt final.
 
 Tres moviments, i cap més:
 
@@ -185,8 +196,10 @@ Aquestes són palanques de producte, no de programació.
 | Perfil Fiable / Equilibrat / Immediat | Calma contra rapidesa |
 | Mida del text (`⌘ +` / `⌘ −`) | Lectura a distància |
 | Tema fosc (`⌘ D`) | Com els subtítols de broadcast: clar sobre fosc |
-| Degradat per antiguitat (`⌘ G`) | Les paraules velles s’esvaneixen. Apagat per defecte: el lector va 1–3 s per darrere i justament necessita el que això esborraria |
+| Degradat per antiguitat (`⌘ G`) | Les línies s’esvaneixen senceres a mesura que pugen (mai paraula per paraula: una frase no pot començar més pàl·lida del que acaba), amb una transició lenta de 0,9 s. El text s’enfila fins a dalt de tot del panell; la línia de dalt continua llegible i s’apaga del tot abans de sortir, de manera que res no desapareix de cop. Apagat per defecte: el lector va 1–3 s per darrere i justament necessita el que això esborraria |
 | Panell de la dreta (`⌘ \`) | Presència visual o només paper |
+| Vocabulari (dins de la configuració; a l'iPhone, a l'engranatge) | Els noms, llocs i sigles d'avui. El motor els afavoreix i surten escrits bé. Fins a 40; es desen; es pot afegir mentre escolta |
+| Exportar (`⌘ E`, o la icona de dalt a la dreta) | El text de la sessió com a .txt, .md o .srt (una paraula per subtítol, amb el seu temps). Es pot copiar o desar |
 
 El perfil no es pot canviar mentre graves.
 Canviar-lo a mitja frase seria com canviar l’editor a meitat de directe.
@@ -213,7 +226,7 @@ Un fitxer d’àudio de laboratori no reprodueix ni el clic accidental, ni el si
 ## En una imatge mental
 
 ```
-veu  →  cinta de 6 s  →  presa de 4 s  →  cervell català al Mac
+veu  →  cinta de 7 s  →  presa de 7 s  →  cervell català al Mac
                                               ↓
                                     esborrany de paraules
                                               ↓

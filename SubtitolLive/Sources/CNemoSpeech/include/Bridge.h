@@ -14,6 +14,11 @@ typedef struct stl_result stl_result;
 stl_engine* stl_engine_create(const char* model_path, char* error, size_t error_capacity);
 void stl_engine_destroy(stl_engine* engine);
 
+/// Words and short phrases the recogniser should favour from the next transcription on
+/// (names, places, terms of the day). `boost` is the strength (1–10; 0 keeps the
+/// runtime's default); an empty list turns boosting off.
+void stl_engine_set_phrases(stl_engine* engine, const char* const* phrases, size_t count, float boost);
+
 int stl_engine_transcribe(
     stl_engine* engine,
     const float* samples,

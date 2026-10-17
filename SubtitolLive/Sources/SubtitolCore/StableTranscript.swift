@@ -10,17 +10,40 @@ public struct StableTranscriptWord: Identifiable, Equatable, Sendable {
     /// is carried separately by `id`, so inserting a provisional word may change this
     /// position without destroying and rebuilding its view.
     public let anchor: UInt64
+    /// Where the recogniser heard the word, on the capture sample clock. `nil` when the
+    /// word did not come with timings.
+    public let startSequence: UInt64?
+    public let endSequence: UInt64?
+    /// The word opens a new paragraph, after a blank line and with a capital: the
+    /// speaker finished a sentence and paused, or another voice took over.
+    public let startsParagraph: Bool
+    /// The word starts a new line inside a sentence: the speaker stopped for a second or
+    /// more mid-sentence. No blank line and no capital, because the sentence goes on.
+    public let startsLine: Bool
+    /// How sure the recogniser was of this form, 0–1, averaged over the windows that
+    /// heard it; `nil` when the engine gives none.
+    public let confidence: Float?
 
     public init(
         id: UInt64,
         text: String,
         isCommitted: Bool = false,
-        anchor: UInt64 = 0
+        anchor: UInt64 = 0,
+        startSequence: UInt64? = nil,
+        endSequence: UInt64? = nil,
+        startsParagraph: Bool = false,
+        startsLine: Bool = false,
+        confidence: Float? = nil
     ) {
         self.id = id
         self.text = text
         self.isCommitted = isCommitted
         self.anchor = anchor
+        self.startSequence = startSequence
+        self.endSequence = endSequence
+        self.startsParagraph = startsParagraph
+        self.startsLine = startsLine
+        self.confidence = confidence
     }
 }
 

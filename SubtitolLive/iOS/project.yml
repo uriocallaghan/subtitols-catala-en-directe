@@ -1,0 +1,605 @@
+# The iPhone app and the Mac App Store app (SubtitolLiveMac, same App Store Connect
+# record: universal purchase). Generate the Xcode project with `xcodegen` from this
+# folder, or run ../scripts/build-ios-app.sh, which also stages the resources it needs.
+# The shared modules are compiled from the same sources as the SwiftPM Mac app
+# (../Sources), once per platform; the runtime comes from Vendor/RuntimeiOS
+# (../scripts/build-ios-runtime.sh: iPhone, Simulator and macOS slices).
+name: SubtitolLiveiOS
+options:
+  bundleIdPrefix: com.uriocallaghan.duna
+  # The interface is written in Catalan and translated to es, gl, eu and en through
+  # ../Resources/Localizable.xcstrings (shared by both apps) and each app's
+  # InfoPlist.xcstrings. The iPhone follows the language chosen in its onboarding.
+  developmentLanguage: ca
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    # One bundle ID for the iPhone app, the Mac app and both extensions
+    # (<id>.asset-downloader). It is fixed forever at the first App Store Connect upload.
+    APP_BUNDLE_ID: com.uriocallaghan.duna
+    # The runtime is arm64 only, so every macOS target is too (Apple silicon Macs).
+    ARCHS[sdk=macosx*]: arm64
+    DEVELOPMENT_TEAM: WAV6CC7W94
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "7"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEAD_CODE_STRIPPING: YES
+    SWIFT_INCLUDE_PATHS: $(SRCROOT)/Modules/CNemoSpeech
+targets:
+  SubtitolCore:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Sources/SubtitolCore
+  SubtitolPunctuation:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Sources/SubtitolPunctuation
+    dependencies:
+      - target: SubtitolCore
+        link: false
+  SubtitolSpeakers:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Sources/SubtitolSpeakers
+    dependencies:
+      - target: SubtitolCore
+        link: false
+      - target: SubtitolPunctuation
+        link: false
+  CNemoSpeech:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Sources/CNemoSpeech
+  SubtitolEngine:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: ../Sources/SubtitolEngine
+    dependencies:
+      - target: SubtitolCore
+        link: false
+      - target: CNemoSpeech
+        link: false
+  # macOS copies of the shared modules for SubtitolLiveMac (same sources and module names).
+  SubtitolCoreMac:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../Sources/SubtitolCore
+    settings:
+      base:
+        PRODUCT_NAME: SubtitolCore
+  SubtitolPunctuationMac:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../Sources/SubtitolPunctuation
+    dependencies:
+      - target: SubtitolCoreMac
+        link: false
+    settings:
+      base:
+        PRODUCT_NAME: SubtitolPunctuation
+  SubtitolSpeakersMac:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../Sources/SubtitolSpeakers
+    dependencies:
+      - target: SubtitolCoreMac
+        link: false
+      - target: SubtitolPunctuationMac
+        link: false
+    settings:
+      base:
+        PRODUCT_NAME: SubtitolSpeakers
+  CNemoSpeechMac:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../Sources/CNemoSpeech
+    settings:
+      base:
+        PRODUCT_NAME: CNemoSpeech
+  SubtitolEngineMac:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../Sources/SubtitolEngine
+    dependencies:
+      - target: SubtitolCoreMac
+        link: false
+      - target: CNemoSpeechMac
+        link: false
+    settings:
+      base:
+        PRODUCT_NAME: SubtitolEngine
+  AssetDownloader:
+    type: extensionkit-extension
+    platform: iOS
+    sources:
+      - path: AssetDownloader
+        excludes:
+          - "*.entitlements"
+    info:
+      path: AssetDownloader/Info.plist
+      properties:
+        CFBundleDisplayName: duna
+        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        EXAppExtensionAttributes:
+          EXExtensionPointIdentifier: com.apple.background-asset-downloader-extension
+    entitlements:
+      path: AssetDownloader/AssetDownloader.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).asset-downloader
+        PRODUCT_NAME: AssetDownloader
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: AssetDownloader/Info.plist
+  # "Subtítol Live" in the share menu of a video: copies it into the app group and
+  # opens the app on it (subtitollive://import). The work itself happens in the app.
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+        excludes:
+          - "*.entitlements"
+          - Info.plist
+      - path: ../Sources/SubtitolLive/SharedInbox.swift
+      - path: ../Resources/Localizable.xcstrings
+        group: Resources
+        buildPhase: resources
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: duna
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [ca, es, gl, eu, en]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # Exactly one item, and it is a video or an audio file.
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $item, SUBQUERY($item.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" ||
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio").@count == 1).@count == 1
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).share
+        PRODUCT_NAME: ShareExtension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+  # The button for Control Center, the Lock Screen and the Action button. Its action
+  # (Controls/StartTranscribingControlIntent.swift) is compiled into the app too, and
+  # runs there.
+  Controls:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Controls
+        excludes:
+          - Info.plist
+      - path: ../Resources/Localizable.xcstrings
+        group: Resources
+        buildPhase: resources
+    info:
+      path: Controls/Info.plist
+      properties:
+        CFBundleDisplayName: duna
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [ca, es, gl, eu, en]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).controls
+        PRODUCT_NAME: Controls
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Controls/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+  SubtitolLiveiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: SubtitolLiveiOS
+        excludes:
+          - "*.entitlements"
+          - Info.plist
+      - path: Controls/StartTranscribingControlIntent.swift
+      # The shared subset of the Mac app's sources (the same folder reference as the
+      # Mac target's, so Xcode keeps one group for it, under Sources).
+      - path: ../Sources/SubtitolLive
+        includes:
+          - SubtitleController.swift
+          - RecognitionCoordinator.swift
+          - VocabularyPieces.swift
+          - AudioCapture.swift
+          - DiagnosticCapture.swift
+          - ModelIntegrityValidator.swift
+          - FixedFocusTranscriptView.swift
+          - WordMetrics.swift
+          - ReadingTheme.swift
+          - SettingsBarStyle.swift
+          - ExportPanel.swift
+          - LanguagePacks.swift
+          - MediaImport.swift
+          - ImportPanel.swift
+          - SubtitleEditorModel.swift
+          - SubtitleEditorView.swift
+          - SharedInbox.swift
+          - LanguageFigure.swift
+          - GreetingLettering.swift
+          - GreetingLettering+Paths.swift
+          - OnboardingCopy.swift
+          - OnboardingPieces.swift
+          - ShortcutHost.swift
+          - AppIntents.swift
+      - path: ../Sources/SubtitolLive/Resources/ModelManifest.json
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Localizable.xcstrings
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/Inter_18pt-Medium.ttf
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/AtkinsonHyperlegibleNext-Medium.ttf
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/AtkinsonHyperlegibleMono-Medium.ttf
+        group: Resources
+        buildPhase: resources
+      - path: ../../.work/ios-stage/veus-segmentacio
+        group: Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: SubtitolCore
+      - target: SubtitolPunctuation
+      - target: SubtitolSpeakers
+      - target: CNemoSpeech
+      - target: SubtitolEngine
+      - target: AssetDownloader
+      - target: ShareExtension
+      - target: Controls
+      - framework: ../Vendor/RuntimeiOS/NemoSpeechRuntime.xcframework
+        embed: false
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: CoreML.framework
+      - sdk: BackgroundAssets.framework
+      - sdk: libc++.tbd
+    postBuildScripts:
+      - name: Bundle languages
+        basedOnDependencyAnalysis: false
+        script: |
+          # Every language is a download (Apple-hosted pack, then the GitHub mirror),
+          # so the app stays small. BUNDLED_LANGUAGES lists ids to carry inside the app
+          # instead (Languages/<id>, ~120-190 MB each); it is empty by the founder's
+          # decision of 2026-10-07. Debug builds also carry every unpacked pack as
+          # DevPacks, so a phone can install one before the packs are on App Store
+          # Connect; Release builds never include DevPacks.
+          packs="$SRCROOT/../../.work/ios-packs"
+          resources="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          rm -rf "$resources/Languages"
+          for language in ${BUNDLED_LANGUAGES:-}; do
+            if [ ! -d "$packs/$language" ]; then
+              echo "error: language pack $language is not staged in $packs (run scripts/stage-ios-resources.sh)"
+              exit 1
+            fi
+            mkdir -p "$resources/Languages/$language"
+            rsync -a --delete "$packs/$language/" "$resources/Languages/$language/"
+          done
+          if [ "$CONFIGURATION" = "Debug" ] && [ -d "$packs" ]; then
+            mkdir -p "$resources/DevPacks"
+            rsync -a --delete "$packs/" "$resources/DevPacks/"
+          else
+            rm -rf "$resources/DevPacks"
+          fi
+    info:
+      path: SubtitolLiveiOS/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [ca, es, gl, eu, en]
+        CFBundleDisplayName: duna
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: duna escolta la veu per convertir-la en text al mateix iPhone. L'àudio no surt mai del telèfon.
+        NSPhotoLibraryAddUsageDescription: duna desa a Fotos els vídeos amb subtítols que facis.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSupportsIndirectInputEvents: true
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        BAAppGroupID: group.com.uriocallaghan.duna
+        BAHasManagedAssetPacks: true
+        BAUsesAppleHosting: true
+        # Videos and recordings open in the app ("Open in" from Files), in place.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Video or audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.movie, public.audio]
+        LSSupportsOpeningDocumentsInPlace: true
+        # The share extension opens the app on the video it left in the app group.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.uriocallaghan.duna.import
+            CFBundleURLSchemes: [subtitollive]
+    entitlements:
+      path: SubtitolLiveiOS/SubtitolLiveiOS.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+        # A speech model, punctuation and the voice-change model run together; the
+        # extra headroom keeps video import clear of the limit on 6 GB iPhones.
+        com.apple.developer.kernel.increased-memory-limit: true
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        PRODUCT_NAME: SubtitolLive
+        INFOPLIST_FILE: SubtitolLiveiOS/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        OTHER_LDFLAGS: -ObjC
+        # Development paths from the environment are ignored outside Debug, as on the Mac.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SUBTITOL_STORE
+  AssetDownloaderMac:
+    type: extensionkit-extension
+    platform: macOS
+    sources:
+      - path: AssetDownloader/AssetDownloader.swift
+    info:
+      path: AssetDownloaderMac/Info.plist
+      properties:
+        CFBundleDisplayName: duna
+        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        EXAppExtensionAttributes:
+          EXExtensionPointIdentifier: com.apple.background-asset-downloader-extension
+    entitlements:
+      path: AssetDownloaderMac/AssetDownloaderMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).asset-downloader
+        PRODUCT_NAME: AssetDownloader
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: AssetDownloaderMac/Info.plist
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        REGISTER_APP_GROUPS: YES
+  # The Mac's "Subtítol Live" in the Share menu of a video: opens the app with the file.
+  # The local build (../scripts/build-app.sh) compiles the same source with its own
+  # ShareExtensionMac/Info.plist; this one is XcodeGen's.
+  ShareExtensionMac:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: ShareExtensionMac/ShareViewController.swift
+    info:
+      path: ShareExtensionMac/Store-Info.plist
+      properties:
+        CFBundleDisplayName: duna
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # Exactly one item, and it is a video or an audio file.
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $item, SUBQUERY($item.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" ||
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio").@count == 1).@count == 1
+    entitlements:
+      path: ShareExtensionMac/Store.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-only: true
+        # Unused by the extension itself, but it makes Xcode give it a provisioning
+        # profile, without which TestFlight refuses the Mac build (ITMS-90889).
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).share
+        PRODUCT_NAME: ShareExtension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExtensionMac/Store-Info.plist
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        REGISTER_APP_GROUPS: YES
+  # The Mac App Store app: sandboxed, languages from Apple-hosted packs (and the mirror) like the iPhone.
+  # SUBTITOL_STORE switches off the environment-variable paths outside Debug.
+  SubtitolLiveMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: SubtitolLiveMac
+        excludes:
+          - "*.entitlements"
+          - Info.plist
+      - path: ../Sources/SubtitolLive
+        includes:
+          - "*.swift"
+      - path: ../Sources/SubtitolLive/Resources/ModelManifest.json
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Localizable.xcstrings
+        group: Resources
+        buildPhase: resources
+      # Copied as source, not compiled: ProceduralShaderView builds it at run time
+      # (a resources phase would compile it into default.metallib instead).
+      - path: ../Sources/SubtitolLive/Resources/ProceduralNoise.metal
+        group: Resources
+        buildPhase:
+          copyFiles:
+            destination: resources
+      - path: ../Resources/Fonts
+        group: Resources
+        type: folder
+        buildPhase: resources
+      # The About panel shows it: credits and licences (CC BY 4.0 asks for attribution).
+      - path: ../Resources/Credits.html
+        group: Resources
+        buildPhase: resources
+      - path: ../../.work/ios-stage/veus-segmentacio
+        group: Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: SubtitolCoreMac
+      - target: SubtitolPunctuationMac
+      - target: SubtitolSpeakersMac
+      - target: CNemoSpeechMac
+      - target: SubtitolEngineMac
+      - target: AssetDownloaderMac
+      - target: ShareExtensionMac
+      - framework: ../Vendor/RuntimeiOS/NemoSpeechRuntime.xcframework
+        embed: false
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: CoreML.framework
+      - sdk: BackgroundAssets.framework
+      - sdk: libc++.tbd
+    postBuildScripts:
+      - name: Bundle languages
+        basedOnDependencyAnalysis: false
+        script: |
+          # As on the iPhone: every language is a download (Apple-hosted pack, then
+          # the GitHub mirror). BUNDLED_LANGUAGES lists ids to carry inside the app
+          # instead (Languages/<id>); empty by the founder's decision of 2026-10-07.
+          # Debug builds carry every unpacked pack as DevPacks; Release never does.
+          packs="$SRCROOT/../../.work/ios-packs"
+          resources="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          rm -rf "$resources/Languages"
+          for language in ${BUNDLED_LANGUAGES:-}; do
+            if [ ! -d "$packs/$language" ]; then
+              echo "error: language pack $language is not staged in $packs (run scripts/stage-ios-resources.sh)"
+              exit 1
+            fi
+            mkdir -p "$resources/Languages/$language"
+            rsync -a --delete "$packs/$language/" "$resources/Languages/$language/"
+          done
+          if [ "$CONFIGURATION" = "Debug" ] && [ -d "$packs" ]; then
+            mkdir -p "$resources/DevPacks"
+            rsync -a --delete "$packs/" "$resources/DevPacks/"
+          else
+            rm -rf "$resources/DevPacks"
+          fi
+    info:
+      path: SubtitolLiveMac/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [ca, es, gl, eu, en]
+        CFBundleName: duna
+        CFBundleDisplayName: duna
+        NSHumanReadableCopyright: © 2026 Oriol O'Callaghan
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.utilities
+        ITSAppUsesNonExemptEncryption: false
+        NSHighResolutionCapable: true
+        ATSApplicationFontsPath: Fonts
+        NSMicrophoneUsageDescription: duna necessita escoltar la teva veu per convertir-la en text al mateix Mac. L'àudio no surt mai de l'ordinador.
+        # Videos and recordings open in the app (Open With, the Dock, the Share menu).
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Video or audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.movie, public.audio]
+        BAAppGroupID: group.com.uriocallaghan.duna
+        BAHasManagedAssetPacks: true
+        BAUsesAppleHosting: true
+    entitlements:
+      path: SubtitolLiveMac/SubtitolLiveMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.device.audio-input: true
+        com.apple.security.device.microphone: true
+        com.apple.security.files.user-selected.read-write: true
+        # Only for a language pack's mirror download (LanguagePacks.swift); the app
+        # has no other network code. The audio never leaves the Mac.
+        com.apple.security.network.client: true
+        com.apple.security.application-groups:
+          - group.com.uriocallaghan.duna
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        # The "í" is decomposed (i + combining accent): macOS cannot start the share
+        # extension inside an app whose folder name has the precomposed one (see
+        # build-app.sh). Looks and sorts the same.
+        PRODUCT_NAME: duna
+        PRODUCT_MODULE_NAME: SubtitolLive
+        EXECUTABLE_NAME: SubtitolLive
+        INFOPLIST_FILE: SubtitolLiveMac/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        OTHER_LDFLAGS: -ObjC
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        REGISTER_APP_GROUPS: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SUBTITOL_STORE
+schemes:
+  SubtitolLiveiOS:
+    build:
+      targets:
+        SubtitolLiveiOS: all
+    run:
+      config: Debug
+      environmentVariables:
+        SUBTITOL_PACKS_DIR: $(SRCROOT)/../../.work/ios-packs
+    archive:
+      config: Release
+  SubtitolLiveMac:
+    build:
+      targets:
+        SubtitolLiveMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release

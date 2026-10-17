@@ -1,0 +1,181 @@
+/* duna — the pages the App Store links to. Same layout as Norah Studio's pages, in duna's
+   own colours: the reading theme's paper and ink, and the orb's orange for links (darkened
+   in light mode so it reads as text). Light and dark follow the system. */
+:root {
+    --background: #FAFAFA;
+    --panel:      #F2F2F2;
+    --inset:      #E9E9E9;
+    --line:       #E3E3E3;
+    --ink:        #111111;
+    --secondary:  #6B6B6B;
+    --accent:     #B34700;
+    --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #121212;
+        --panel:      #1A1A1A;
+        --inset:      #242424;
+        --line:       #2A2A2A;
+        --ink:        #F2F2F2;
+        --secondary:  #9E9E9E;
+        --accent:     #FF8A33;
+    }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    padding: 0 16px 96px;
+    background: var(--background);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+.page { max-width: 660px; margin: 0 auto; }
+
+/* --- masthead ------------------------------------------------------------------ */
+header.masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 0 44px;
+}
+.masthead img { width: 34px; height: 34px; display: block; }
+.masthead .name {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--ink);
+    text-decoration: none;
+}
+.masthead a.name:hover { color: var(--accent); text-decoration: none; }
+.masthead nav.languages {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    font-size: 13px;
+}
+.languages a, .languages span {
+    padding: 4px 9px;
+    border-radius: 999px;
+    color: var(--secondary);
+}
+.languages span { background: var(--panel); color: var(--ink); }
+.languages a:hover { color: var(--ink); text-decoration: none; }
+
+/* --- headings ------------------------------------------------------------------ */
+h1 {
+    font-size: 38px;
+    font-weight: 500;
+    letter-spacing: -1.1px;
+    line-height: 1.12;
+    margin: 0 0 10px;
+}
+.dateline {
+    margin: 0 0 40px;
+    font-size: 13px;
+    color: var(--secondary);
+}
+h2 {
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: -0.4px;
+    margin: 44px 0 12px;
+}
+h2:first-of-type { margin-top: 0; }
+/* Many short headings in a row (Apple's clauses, the questions): tighter than an h2, so
+   they read as parts of one section. */
+h3 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+    margin: 26px 0 6px;
+}
+
+p { margin: 0 0 16px; }
+
+code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.86em;
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: var(--inset);
+    word-break: break-all;
+}
+strong { font-weight: 600; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul { margin: 0 0 16px; padding-left: 22px; }
+li { margin-bottom: 8px; }
+
+/* The one sentence each page exists to say. */
+.lede {
+    font-size: 20px;
+    line-height: 1.5;
+    letter-spacing: -0.3px;
+    margin: 0 0 32px;
+}
+
+/* --- identity list (legal notice, support) ---------------------------------------- */
+.identity {
+    margin: 0 0 20px;
+    padding: 18px 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 10px 22px;
+}
+.identity dt { color: var(--secondary); font-size: 14px; }
+.identity dd { margin: 0; }
+@media (max-width: 520px) {
+    .identity { display: block; }
+    .identity dt { margin-bottom: 1px; }
+    .identity dd + dt { margin-top: 12px; }
+}
+
+/* --- home ----------------------------------------------------------------------- */
+.hero { padding: 8px 0 8px; }
+.hero h1 { font-size: 44px; letter-spacing: -1.4px; }
+.hero p { font-size: 19px; line-height: 1.5; color: var(--secondary); max-width: 34em; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
+.links a {
+    padding: 11px 18px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 14px;
+}
+.links a:hover { border-color: var(--secondary); text-decoration: none; }
+
+/* --- footer --------------------------------------------------------------------- */
+footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+}
+footer a { color: var(--secondary); }
+footer a:hover { color: var(--ink); text-decoration: none; }
+
+@media (max-width: 520px) {
+    h1 { font-size: 30px; letter-spacing: -0.8px; }
+    .hero h1 { font-size: 34px; }
+    .lede, .hero p { font-size: 18px; }
+}

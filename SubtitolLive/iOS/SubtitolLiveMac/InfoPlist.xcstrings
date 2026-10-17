@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "ca",
+  "strings" : {
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Info.plist",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duna necessita escoltar la teva veu per convertir-la en text al mateix Mac. L'àudio no surt mai de l'ordinador."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duna necesita escuchar tu voz para convertirla en texto en el propio Mac. El audio nunca sale del ordenador."
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duna precisa escoitar a túa voz para convertela en texto no propio Mac. O audio nunca sae do ordenador."
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duna-k zure ahotsa entzun behar du, Macean bertan testu bihurtzeko. Audioa ez da inoiz ordenagailutik ateratzen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duna needs to hear your voice to turn it into text right on your Mac. The audio never leaves the computer."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

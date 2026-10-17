@@ -1,4 +1,4 @@
-import AppKit
+import CoreGraphics
 
 public enum AppVisualMetrics {
     public static let minimumPanelInset: CGFloat = 0
@@ -34,11 +34,11 @@ public enum AppVisualMetrics {
 
     public static let readingFontName = "Inter18pt-Medium"
 
-    /// The AppKit counterpart of the Inter Medium font used by the SwiftUI transcript.
+    /// The platform counterpart of the Inter Medium font used by the SwiftUI transcript.
     /// Keeping the font choice here makes measurement and drawing use identical glyphs.
-    public static func readingFont(ofSize size: CGFloat) -> NSFont {
-        NSFont(name: readingFontName, size: size)
-            ?? NSFont.systemFont(ofSize: size, weight: .medium)
+    public static func readingFont(ofSize size: CGFloat) -> PlatformFont {
+        PlatformFont(name: readingFontName, size: size)
+            ?? PlatformFont.systemFont(ofSize: size, weight: .medium)
     }
 
     /// SwiftUI clips glyph ink to a `Text`'s own typographic advance before an outer
@@ -47,13 +47,69 @@ public enum AppVisualMetrics {
     public static let trailingGlyphGuard = "\u{200A}\u{200A}\u{200A}"
 
     /// Text shown for one independently laid-out transcript word.
-    public static func renderedWord(_ word: String) -> String {
-        word + trailingGlyphGuard
+    public static func renderedWord(
+        _ word: String,
+        typeface: ReadingTypeface = .default
+    ) -> String {
+        word + typeface.trailingGlyphGuard
     }
 
-    /// How far back the optional age-gradient reaches, in words. Only used by the
-    /// presentation toggle; the accessible default keeps every word at full contrast.
-    public static let gradientDepthInWords = 12
+    /// Opacity of a whole line under the age gradient, from the row it sits on.
+    ///
+    /// Whole lines fade together: fading word by word left the start of a sentence
+    /// dimmer than its end, so the reader met faint words exactly where they start
+    /// reading. The live lane (`reserve` rows) plus the two rows above it keep full
+    /// contrast; from there opacity falls in equal steps and reaches zero on the first
+    /// row above the pane, so the top row is still faintly readable and a line is
+    /// already invisible by the time it is dropped. Anything that reached the edge with
+    /// ink left would vanish at once — the pop this curve exists to avoid.
+    ///
+    /// `curve` shapes the steps. The Mac pane is tall, so equal steps read evenly. A
+    /// phone shows few rows under the voice orb: `.eased` keeps the rows just above the
+    /// live lane nearly at full contrast, where the reader still is, and spends the fall
+    /// on the rows next to the orb, so the text melts into it rather than dimming as a
+    /// staircase.
+    public static func ageGradientOpacity(
+        rowFromBottom: Int,
+        visibleRows: Int,
+        reserve: Int,
+        curve: AgeGradientCurve = .linear
+    ) -> Double {
+        let lastFullRow = reserve + 1
+        let depth = rowFromBottom - lastFullRow
+        let stepsToZero = visibleRows - lastFullRow
+        guard depth > 0 else { return 1 }
+        guard stepsToZero > 0 else { return 0 }
+        let fraction = min(1, Double(depth) / Double(stepsToZero))
+        switch curve {
+        case .linear:
+            return max(0, 1 - fraction)
+        case .eased:
+            return max(0, 1 - fraction * fraction * (3 - 2 * fraction))
+        }
+    }
+
+    public enum AgeGradientCurve: Sendable, Equatable {
+        case linear
+        case eased
+    }
+
+    /// Rows kept mounted above the pane while the age gradient is on, so a line that
+    /// has rolled out finishes easing to zero instead of being removed mid-fade.
+    public static let ageGradientTrailingRows = 2
+
+    /// How long a line takes to ease into its new opacity. Much longer than the 0.24 s
+    /// roll on purpose: the line moves briskly but dims slowly, so the change is felt
+    /// rather than seen.
+    public static let ageGradientTransitionSeconds: Double = 0.9
+
+    /// Cross-fade between the old and new wrapping when the text size or typeface changes.
+    public static let rewrapCrossFadeSeconds: Double = 0.3
+
+    /// Top inset of the transcript pane. It reaches up into the margin to keep more past
+    /// lines on screen, and it is the same with the age gradient on or off: tying it to
+    /// the gradient made the top lines vanish whenever the gradient was switched off.
+    public static let transcriptTopInset: CGFloat = 36
 
     public static func clampedFontSize(_ size: CGFloat) -> CGFloat {
         min(maximumFontSize, max(minimumFontSize, size))

@@ -10,7 +10,7 @@ let runtimeDirectory = packageDirectory
 
 let package = Package(
     name: "SubtitolLive",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("26.0")],
     products: [
         .executable(name: "SubtitolLive", targets: ["SubtitolLive"]),
         .executable(name: "SubtitolLatencyHarness", targets: ["SubtitolLatencyHarness"]),
@@ -35,9 +35,21 @@ let package = Package(
             dependencies: ["CNemoSpeech", "SubtitolCore"],
             path: "Sources/SubtitolEngine"
         ),
+        .target(
+            name: "SubtitolPunctuation",
+            dependencies: ["SubtitolCore"],
+            path: "Sources/SubtitolPunctuation",
+            linkerSettings: [.linkedFramework("CoreML")]
+        ),
+        .target(
+            name: "SubtitolSpeakers",
+            dependencies: ["SubtitolCore", "SubtitolPunctuation"],
+            path: "Sources/SubtitolSpeakers",
+            linkerSettings: [.linkedFramework("CoreML")]
+        ),
         .executableTarget(
             name: "SubtitolLive",
-            dependencies: ["SubtitolEngine", "SubtitolCore"],
+            dependencies: ["SubtitolEngine", "SubtitolCore", "SubtitolPunctuation", "SubtitolSpeakers"],
             path: "Sources/SubtitolLive",
             resources: [
                 .process("Resources"),
@@ -57,8 +69,13 @@ let package = Package(
             path: "Tests/SubtitolLiveTests"
         ),
         .executableTarget(
+            name: "SubtitolPunctuationCheck",
+            dependencies: ["SubtitolCore", "SubtitolPunctuation"],
+            path: "Tests/SubtitolPunctuationCheck"
+        ),
+        .executableTarget(
             name: "SubtitolLatencyHarness",
-            dependencies: ["SubtitolEngine", "SubtitolCore"],
+            dependencies: ["SubtitolEngine", "SubtitolCore", "SubtitolPunctuation", "SubtitolSpeakers"],
             path: "Sources/SubtitolLatencyHarness",
             linkerSettings: [
                 .unsafeFlags([

@@ -1,4 +1,3 @@
-import AppKit
 import CoreText
 import SubtitolCore
 import SwiftUI
@@ -13,39 +12,61 @@ enum WordMetrics {
     private static var cache: [String: CGFloat] = [:]
     private static var cachedFontSize: CGFloat = 0
     private static var cachedTracking: CGFloat = 0
+    private static var cachedTypeface: ReadingTypeface = .default
 
     private static let cacheLimit = 1_024
 
-    static func width(of text: String, fontSize: CGFloat, tracking: CGFloat) -> CGFloat {
+    static func width(
+        of text: String,
+        typeface: ReadingTypeface,
+        fontSize: CGFloat,
+        tracking: CGFloat
+    ) -> CGFloat {
         measuredWidth(
-            of: AppVisualMetrics.renderedWord(text),
+            of: AppVisualMetrics.renderedWord(text, typeface: typeface),
+            typeface: typeface,
             fontSize: fontSize,
             tracking: tracking
         )
     }
 
-    static func trailingGuardWidth(fontSize: CGFloat, tracking: CGFloat) -> CGFloat {
+    static func trailingGuardWidth(
+        typeface: ReadingTypeface,
+        fontSize: CGFloat,
+        tracking: CGFloat
+    ) -> CGFloat {
         measuredWidth(
-            of: AppVisualMetrics.trailingGlyphGuard,
+            of: typeface.trailingGlyphGuard,
+            typeface: typeface,
             fontSize: fontSize,
             tracking: tracking
         )
+    }
+
+    static func spaceWidth(
+        typeface: ReadingTypeface,
+        fontSize: CGFloat,
+        tracking: CGFloat
+    ) -> CGFloat {
+        measuredWidth(of: " ", typeface: typeface, fontSize: fontSize, tracking: tracking)
     }
 
     private static func measuredWidth(
         of renderedText: String,
+        typeface: ReadingTypeface,
         fontSize: CGFloat,
         tracking: CGFloat
     ) -> CGFloat {
-        if cachedFontSize != fontSize || cachedTracking != tracking {
+        if cachedFontSize != fontSize || cachedTracking != tracking || cachedTypeface != typeface {
             cache.removeAll(keepingCapacity: true)
             cachedFontSize = fontSize
             cachedTracking = tracking
+            cachedTypeface = typeface
         }
         if let cached = cache[renderedText] { return cached }
 
         var attributes: [NSAttributedString.Key: Any] = [
-            .font: AppVisualMetrics.readingFont(ofSize: fontSize)
+            .font: typeface.font(ofSize: fontSize)
         ]
         if tracking != 0 { attributes[.kern] = tracking }
         let line = CTLineCreateWithAttributedString(

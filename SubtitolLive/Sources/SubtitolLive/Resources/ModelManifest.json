@@ -1,27 +1,342 @@
 {
-  "schemaVersion": 1,
-  "artifact": {
-    "filename": "catalan-parakeet-q8.gguf",
-    "sha256": "3b7829f2f292545b79e0195dd5f75b0c8ff9c467dc9f3c18ff558181605e55a0",
-    "quantization": "Q8_0"
+  "schemaVersion": 2,
+  "defaultModel": "conformer",
+  "models": [
+    {
+      "id": "conformer",
+      "displayName": "Conformer",
+      "filename": "catalan-conformer-q8.gguf",
+      "sha256": "5a2ce66d795e9474068496ae196bd3c279084bb503e767741eb88d7929fb8a8e",
+      "sizeBytes": 130922816,
+      "liveWindowSeconds": 7.0,
+      "quantization": "Q8_0",
+      "tensorTypes": {
+        "Q8_0": 193,
+        "F16": 20,
+        "F32": 467
+      },
+      "architecture": "Conformer RNNT, 120M parameters, striding 4x, Catalan and Spanish",
+      "license": "CC-BY-4.0",
+      "attribution": "stt_ca-es_conformer_transducer_large by the Language Technologies Unit of the Barcelona Supercomputing Center (Abir Messaoudi, Baybars Külebi), Projecte Aina, funded by ILENIA. https://huggingface.co/projecte-aina/stt_ca-es_conformer_transducer_large",
+      "origin": {
+        "checkpoint": "projecte-aina/stt_ca-es_conformer_transducer_large",
+        "file": "stt_ca-es_conformer_transducer_large.nemo",
+        "sha256": "cd1067521a5b33d5175dc26692a706c5825bdd23f5d301f888500887c808edf1",
+        "status": "recorded"
+      },
+      "conversion": {
+        "tool": "NeMo-Speech.cpp convert_model.py with SubtitolLive/Vendor/Runtime/patches (0001, 0002)",
+        "command": "convert_model.py stt_ca-es_conformer_transducer_large.nemo --architecture asr --head-type rnnt --outtype q8_0 --no-embed-pe -o catalan-conformer-q8.gguf",
+        "notes": "The mel filterbank is copied from the checkpoint. The positional-encoding table is omitted and rebuilt by the runtime at load time (20 MB smaller file, identical transcripts). The output is deterministic: two conversions give the same SHA-256."
+      },
+      "decoder": {
+        "architecture": "RNNT",
+        "mode": "offline-full-context",
+        "confidence": "unavailable-constant-1.0-is-not-exposed"
+      },
+      "evaluation": {
+        "date": "2026-09-25",
+        "corpus": "FLEURS ca_es test, first 45 utterances, plus the owner's three recordings (reading, free speech, noise) cut into 29 fragments of 8 s: 1665 words.",
+        "results": [
+          "Parity with an independent reference (OpenVoiceOS FP32 ONNX export run with onnx-asr): 72 of 74 fragments identical, 6 of 1665 words differ. In the one substantive difference our engine is right ('l'any mil nou-cents noranta-dos', as read).",
+          "Runtime-built positional table against the embedded one, F16: all 74 transcripts identical.",
+          "Compression against F16: Q8_0 2 words differ (foreign fragments); Q6_K 2 differ, one an inserted Spanish 'vale'; Q5_K 7 differ; Q4_K 23 differ, including errors on the owner's voice. Q8_0 is the smallest variant without a measurable regression.",
+          "Live pipeline, owner voice, Reliable profile, fixed clock. Reading (214 words): 4 s 4.7% WER, 6 s 2.3%, 8 s 2.3%; noise (60 words): 4 s 5.0%, 6 s 3.3%. The model sometimes drops the apostrophe of elisions ('l acordió'); CatalanElisionRepair restores it.",
+          "Live window chosen on 2026-09-25 with 87 ParlamentParla v3 clips (4,296 words of spontaneous speech, fixed clock, Reliable profile): WER 6 s 15.3%, 7 s 15.0%, 8 s 14.7%; stable-text latency P95 on the owner's reading 1.13, 1.10 and 1.24 s (8 s is over the Reliable 1.2 s target). 7 s is the live setting. The model card lists ParlamentParla v3 among its training data, so these clips measure the window, not the model.",
+          "Chosen as the app's only model on 2026-09-26 after a comparison with the former default (BSC Catalan Parakeet RNNT 1.1B, Q4_K, 4 s window) on audio neither had been trained on (.work/clean-test): FLEURS ca test, 150 read sentences, 3.8% WER against 4.0%; 60 EMpodcat conversation clips, 12.8% against 14.6% (clip edges excluded; 95% interval of the gap 0.8 to 2.8 points); two full Softcatalà podcast episodes (35 min, 3-6 voices), 7.3% against 8.5%. Spanish words in Catalan speech: 1 against 3. Also decided on licence (CC-BY-4.0), size (131 MB against 612 MB) and fit on iPhone."
+        ],
+        "notes": "Replacing the checkpoint requires a reproducible corpus the candidate was not trained on (.work/clean-test is one), a lower WER in conversation, no more Spanish words, fewer non-speech insertions, and no material latency regression. Any new compression must show no measurable regression against the F16 conversion on the same audio."
+      }
+    },
+    {
+      "id": "fastconformer-es",
+      "displayName": "FastConformer (castellà)",
+      "filename": "spanish-fastconformer-q8.gguf",
+      "sha256": "22061afaede75cdf693df91fc876f54972f28a85a007602caf80942bacdf746b",
+      "sizeBytes": 123446752,
+      "liveWindowSeconds": 7.0,
+      "writesPunctuation": true,
+      "quantization": "Q8_0",
+      "architecture": "FastConformer hybrid RNNT+CTC (RNNT head), 114M parameters, dw_striding 8x, Spanish, writes punctuation and capitals",
+      "license": "CC-BY-4.0",
+      "attribution": "stt_es_fastconformer_hybrid_large_pc by NVIDIA. https://huggingface.co/nvidia/stt_es_fastconformer_hybrid_large_pc",
+      "origin": {
+        "checkpoint": "nvidia/stt_es_fastconformer_hybrid_large_pc",
+        "revision": "d3fcff82e2ddec13517256402aa5da86400c5893",
+        "file": "stt_es_fastconformer_hybrid_large_pc.nemo",
+        "sha256": "4da031eaaae183108d0da5f63a8f0982a4d2c4372dc847d0ef502318bad27505",
+        "status": "recorded"
+      },
+      "conversion": {
+        "tool": "NeMo-Speech.cpp convert_model.py with SubtitolLive/Vendor/Runtime/patches",
+        "command": "convert_model.py stt_es_fastconformer_hybrid_large_pc.nemo --architecture asr --head-type rnnt --outtype q8_0 --no-embed-pe -o spanish-fastconformer-q8.gguf",
+        "notes": "The auxiliary CTC head of the hybrid checkpoint (0.53 M parameters, unused by the RNNT decoder) is skipped by a one-line converter change (.work/lang-spike/tools/converter-copy/ctc_skip.patch); 60/60 transcripts are identical with and without it."
+      },
+      "decoder": {
+        "architecture": "RNNT",
+        "mode": "offline-full-context",
+        "confidence": "unavailable-constant-1.0-is-not-exposed"
+      },
+      "evaluation": {
+        "date": "2026-09-28",
+        "corpus": "FLEURS es_419 test (Google, CC-BY-4.0), first 60 and 150 utterances of 3-15 s, read speech; .work/lang-spike",
+        "results": [
+          "Offline: 4.13% WER (n=150), 4.27% (n=60); Q8_0 against F16: 59/60 identical.",
+          "Live pipeline (7 s window, fixed clock), after the seam-repeat fix of 2026-09-28: 4.72% WER (n=60), was 6.45% with 20 repeated words at window seams.",
+          "Punctuation as shown to the reader (RecognizerPunctuation + TranscriptFormatter): sentence end F1 0.91, comma F1 0.76, questions 1.0, capitals 98%."
+        ]
+      }
+    },
+    {
+      "id": "fastconformer-en",
+      "displayName": "FastConformer (English)",
+      "filename": "english-fastconformer-q8.gguf",
+      "sha256": "308b862ec763f54fd307f39ba9f2156c0b47a9e8f52f409fa4e7ea7b390fd54f",
+      "sizeBytes": 123447552,
+      "liveWindowSeconds": 7.0,
+      "writesPunctuation": true,
+      "quantization": "Q8_0",
+      "architecture": "FastConformer hybrid RNNT+CTC (RNNT head), 114M parameters, dw_striding 8x, English, writes punctuation and capitals",
+      "license": "CC-BY-4.0",
+      "attribution": "stt_en_fastconformer_hybrid_large_pc by NVIDIA. https://huggingface.co/nvidia/stt_en_fastconformer_hybrid_large_pc",
+      "origin": {
+        "checkpoint": "nvidia/stt_en_fastconformer_hybrid_large_pc",
+        "revision": "e60371c84e0d84d12d3ce5c94732022c8388b7ea",
+        "file": "stt_en_fastconformer_hybrid_large_pc.nemo",
+        "sha256": "ad9953401a4080e501fe86b36159f94d2bb84da3f07b5613fb0f99057e40d0c2",
+        "status": "recorded"
+      },
+      "conversion": {
+        "tool": "NeMo-Speech.cpp convert_model.py with SubtitolLive/Vendor/Runtime/patches",
+        "command": "convert_model.py stt_en_fastconformer_hybrid_large_pc.nemo --architecture asr --head-type rnnt --outtype q8_0 --no-embed-pe -o english-fastconformer-q8.gguf",
+        "notes": "The auxiliary CTC head of the hybrid checkpoint (0.53 M parameters, unused by the RNNT decoder) is skipped by a one-line converter change (.work/lang-spike/tools/converter-copy/ctc_skip.patch); 60/60 transcripts are identical with and without it."
+      },
+      "decoder": {
+        "architecture": "RNNT",
+        "mode": "offline-full-context",
+        "confidence": "unavailable-constant-1.0-is-not-exposed"
+      },
+      "evaluation": {
+        "date": "2026-09-28",
+        "corpus": "FLEURS en_us test (Google, CC-BY-4.0), 60 utterances of 3-15 s; .work/lang-spike",
+        "results": [
+          "Offline: 4.68% WER (n=60), about 4.0% with spelling variants forgiven.",
+          "Live pipeline after the seam-repeat fix of 2026-09-28: 5.59% WER, was 7.72% with 22 repeated words at window seams."
+        ]
+      }
+    },
+    {
+      "id": "los-gl",
+      "displayName": "Conformer LoS (galego)",
+      "filename": "galician-los-q8.gguf",
+      "sha256": "3027a48cdd88149e625d457dcb18bf144a84a455ff71709e07699d8964fb92af",
+      "sizeBytes": 131010048,
+      "liveWindowSeconds": 7.0,
+      "writesPunctuation": true,
+      "quantization": "Q8_0",
+      "architecture": "Conformer RNNT, 120M parameters, striding 4x, Catalan, Spanish, Galician and Basque, writes punctuation and capitals",
+      "license": "Apache-2.0",
+      "attribution": "stt_los_conformer_transducer_large_punctuated by the Language Technologies Unit of the Barcelona Supercomputing Center (Abir Messaoudi, Sarah Solito, Carlos Hernández Mena, Cristina España-Bonet). https://huggingface.co/BSC-LT/stt_los_conformer_transducer_large_punctuated",
+      "origin": {
+        "checkpoint": "BSC-LT/stt_los_conformer_transducer_large_punctuated",
+        "revision": "1a081bd1a18382e83557a228c832ab41ec24ba52",
+        "file": "stt_los_conformer_transducer_large_punctuated.nemo",
+        "sha256": "22bb170481fcdcc909394a2e10c67da745ed8e15546d2281bcc76afad8b07c78",
+        "status": "recorded"
+      },
+      "conversion": {
+        "tool": "NeMo-Speech.cpp convert_model.py with SubtitolLive/Vendor/Runtime/patches",
+        "command": "convert_model.py stt_los_conformer_transducer_large_punctuated.nemo --architecture asr --head-type rnnt --outtype q8_0 --no-embed-pe -o galician-los-q8.gguf",
+        "notes": "Stock converter with the local striding patch."
+      },
+      "decoder": {
+        "architecture": "RNNT",
+        "mode": "offline-full-context",
+        "confidence": "unavailable-constant-1.0-is-not-exposed"
+      },
+      "evaluation": {
+        "date": "2026-09-28",
+        "corpus": "FLEURS gl_es test (Google, CC-BY-4.0), 60 utterances; the model card lists FLEURS Galician among its training data without naming splits, so read the numbers as optimistic",
+        "results": [
+          "Offline: 7.58% WER (the unpunctuated LoS model: 7.73%); sentence end precision 1.00, recall 0.69; comma F1 0.78; capitals 98%.",
+          "Slips into Spanish word forms in about 0.5% of words (ceremonia, fue, decir); the model takes no language prompt."
+        ]
+      }
+    },
+    {
+      "id": "hitz-eu",
+      "displayName": "Conformer HiTZ (euskara)",
+      "filename": "basque-conformer-q8.gguf",
+      "sha256": "3467f352aef8b28cb30a07b986490c5a32eb955a3e0644c97c99399706d6f006",
+      "sizeBytes": 131445440,
+      "liveWindowSeconds": 7.0,
+      "writesPunctuation": false,
+      "quantization": "Q8_0",
+      "architecture": "Conformer RNNT, 120M parameters, striding 4x, Basque, lowercase without punctuation",
+      "license": "Apache-2.0",
+      "attribution": "stt_eu_conformer_transducer_large_v2 by HiTZ (Basque Center for Language Technology, UPV/EHU). https://huggingface.co/HiTZ/stt_eu_conformer_transducer_large_v2",
+      "origin": {
+        "checkpoint": "HiTZ/stt_eu_conformer_transducer_large_v2",
+        "revision": "3037d48dba04505601f1c6ff7a9516a9a6688e44",
+        "file": "stt_eu_conformer_transducer_large_v2.nemo",
+        "sha256": "47d6a43574a0ea175e4e8586532e31e0703ccc27ec01e09fb2c1c91c18868e35",
+        "status": "recorded"
+      },
+      "conversion": {
+        "tool": "NeMo-Speech.cpp convert_model.py with SubtitolLive/Vendor/Runtime/patches",
+        "command": "convert_model.py stt_eu_conformer_transducer_large_v2.nemo --architecture asr --head-type rnnt --outtype q8_0 --no-embed-pe -o basque-conformer-q8.gguf",
+        "notes": "Stock converter with the local striding patch."
+      },
+      "decoder": {
+        "architecture": "RNNT",
+        "mode": "offline-full-context",
+        "confidence": "unavailable-constant-1.0-is-not-exposed"
+      },
+      "evaluation": {
+        "date": "2026-09-28",
+        "corpus": "HiTZ composite_corpus_eu_v2.1 test_parl (Basque Parliament, 60) and test_oslr (OpenSLR 76, 50); .work/lang-spike",
+        "results": [
+          "Offline: 3.19% WER on Parliament, 12.33% on OpenSLR; the punctuated BSC LoS model scored 4.92% and 16.44% on the same clips (without clips where it writes digits), so Basque keeps this recogniser and gets its own punctuation model."
+        ]
+      }
+    }
+  ],
+  "punctuation": {
+    "directory": "catala-puntuacio",
+    "release_asset": "catala-puntuacio.zip",
+    "files": {
+      "labels.json": "868d4e60c0f4f5c8a33551410f3c3785664f54941c625d7c33c4b9e07285aa31",
+      "merges.txt": "43573a056ce99c808a79637518d3ca732ac6ac94e678ee4bd73ddc61a35d39d8",
+      "puntuacio.mlpackage/Data/com.apple.CoreML/model.mlmodel": "90d8d771300964456fd9e40d4bb8db6f53cb98d8abb9ecedc62fe96d79119906",
+      "puntuacio.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "0df7edc8f3e79bf1376de5dd7a5d92cc37825ff9f0fefd528e4828d9e12a9743",
+      "puntuacio.mlpackage/Manifest.json": "6c3566f7f132e33e0efa45d77739c729ee2bcfe744f24a55f687b48881f72456",
+      "vocab.json": "17b307235ee41d399d83f188bff79227d84abd55c95eb32b0c4a5a1097944df4"
+    },
+    "model": "Our Catalan punctuation and capitalisation model v3: v2 (projecte-aina/distilroberta-base-ca-v2, Apache-2.0, fine-tuned on Common Voice CA sentences and CATalog parliamentary transcripts, all CC0) trained a further 105 min on 8.3M words of CC0 parliamentary transcripts plus Common Voice, 60% of examples cropped to random windows so it decides well with the three words of right context the app gives it. Core ML, 6-bit palettised, 59 MB.",
+    "labels": "24 labels, <mark><case>: marks none , . ? ! :, cases l u e a.",
+    "evaluation": [
+      "Live, as the app uses it (32 words before, 3 after), F1: FLEURS sentence end 78 (v2 69), comma 62; Softcatalà podcasts sentence end 54 (v2 38), comma 64, question 38 (v2 28), sentence-start capital 71 (v2 56).",
+      "Full context, F1: FLEURS sentence end 83, comma 65, proper nouns 73; podcasts sentence end 56, comma 65, question 52. The 6-bit Core ML model scores within one point of PyTorch.",
+      "Training paragraphs sharing any 8-word sequence with FLEURS, the podcasts, the founder's recordings or the ParlamentParla calibration clips were removed (36 paragraphs).",
+      "Swift port against Python on 2026-09-25: tokenizer identical on 24,921 words; labels identical on 37,254 words (336 paragraphs); number normalisation identical on 4,354 lines.",
+      "Live pipeline: a few ms per update; words freeze with three words of right context, or when the speaker pauses."
+    ]
   },
-  "origin": {
-    "checkpoint": null,
-    "revision": null,
-    "status": "unknown-must-be-recovered-before-model-comparison"
+  "speakers": {
+    "directory": "veus-segmentacio",
+    "release_asset": "veus-segmentacio.zip",
+    "files": {
+      "LICENSE": "63a777ad4b3c7aed4b260b084d8fb49ec781c46c70c6b599ca5d2402ef7ebe50",
+      "segmentacio.mlpackage/Data/com.apple.CoreML/model.mlmodel": "1516ca79c27f0d0f08bd0b98dce543e0a2c04021e0b9b193d65db1673130dcb6",
+      "segmentacio.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "74ced0a5ede1a0c1d25bab5ab6c0ff8b8adf16c8f16e05bd7eae58debea2134a",
+      "segmentacio.mlpackage/Manifest.json": "78fe7bb69663e96a78a305a3ef935d569b03209df20a22adbf0d1ea15f12b8b8"
+    },
+    "model": "pyannote segmentation-3.0 (MIT, CNRS; weights from onnx-community/pyannote-segmentation-3.0 at 733a93b6, ONNX SHA-256 057ee564…ea25), rebuilt in PyTorch and converted to Core ML float32 by scripts/convert-speaker-model.py. 1.5M parameters, 5.7 MB. Hears voices, not words: the same model serves every language.",
+    "evaluation": [
+      "Core ML against ONNX Runtime on a 15-minute podcast (Softcatalà, 3-6 voices): 53,010 of 53,010 frames give the same class; largest logit difference 0.0003."
+    ]
   },
-  "conversion": {
-    "tool": "NeMo-Speech.cpp",
-    "configuration": null,
-    "status": "historical-conversion-configuration-not-recorded"
-  },
-  "decoder": {
-    "architecture": "RNNT",
-    "mode": "offline-full-context",
-    "confidence": "unavailable-constant-1.0-is-not-exposed"
-  },
-  "evaluation": {
-    "corpus": "synthetic-catalan-audit-2026-08-30",
-    "notes": "Current baseline only. A replacement requires a reproducible corpus, at least 10% relative WER improvement, fewer non-speech insertions, and no material latency regression."
+  "languages": [
+    {
+      "id": "ca",
+      "name": "Català",
+      "stage": "stable",
+      "locales": [
+        "ca"
+      ],
+      "assetPack": "lang-ca",
+      "model": "conformer",
+      "punctuation": "catala-puntuacio",
+      "approximateDownloadBytes": 190000000,
+      "notes": "Language pack: the speech model plus the compiled punctuation model, downloaded on demand (Apple-hosted Background Assets).",
+      "mirror": {
+        "url": "https://github.com/uriocallaghan/subtitols-catala-en-directe/releases/download/packs-1.0/lang-ca.aar",
+        "sha256": "90fa8e8dd866a5726d730688a12bd73ffcffdfa6de9bfa847b7938e3f58d6591",
+        "bytes": 191910984
+      }
+    },
+    {
+      "id": "gl",
+      "name": "Galego",
+      "stage": "beta",
+      "locales": [
+        "gl"
+      ],
+      "assetPack": "lang-gl",
+      "model": "los-gl",
+      "punctuation": null,
+      "approximateDownloadBytes": 131500000,
+      "notes": "Language pack: BSC's punctuated LoS Conformer (Apache 2.0), which writes its own marks and capitals; read by RecognizerPunctuation; downloaded on demand (Apple-hosted pack, then the GitHub mirror) on iPhone and Mac.",
+      "mirror": {
+        "url": "https://github.com/uriocallaghan/subtitols-catala-en-directe/releases/download/packs-1.0/lang-gl.aar",
+        "sha256": "dd6e7e58adfb981a927fc506c394d974be07ae60731ccb4307bccff8bee5fffd",
+        "bytes": 130193437
+      }
+    },
+    {
+      "id": "eu",
+      "name": "Euskara",
+      "stage": "beta",
+      "locales": [
+        "eu"
+      ],
+      "assetPack": "lang-eu",
+      "model": "hitz-eu",
+      "punctuation": "euskara-puntuacio",
+      "approximateDownloadBytes": 170000000,
+      "notes": "Language pack: HiTZ Conformer (Apache 2.0, lowercase without marks) plus our Basque punctuation model eu-B (HiTZ/BERnaT-medium, Apache 2.0, fine-tuned on ParlaMint-ES-PV 5.0 CC BY 4.0, Common Voice CC0 and ZelaiHandi public-domain/CC BY parts; 6-bit Core ML, 38 MB). Scores and data: .work/eu-punct/README.md. Live on 60 Basque Parliament clips: WER 4.02%; downloaded on demand (Apple-hosted pack, then the GitHub mirror) on iPhone and Mac.",
+      "punctuationFiles": {
+        "labels.json": "868d4e60c0f4f5c8a33551410f3c3785664f54941c625d7c33c4b9e07285aa31",
+        "merges.txt": "3f244a08f2d4981cf9c334d7e920dabac885884a1bc67223c1b3ec1a95324680",
+        "puntuacio.mlpackage/Data/com.apple.CoreML/model.mlmodel": "39432afcca0bb13f76da0adc2f513c666ef646e4a5a467bfa9a118100b802cc5",
+        "puntuacio.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "0fae7d00aca4f56064d4e9c4ffcaefe20d338b119c94cab9da13e5deee954187",
+        "puntuacio.mlpackage/Manifest.json": "1adc415d7f0e02d48c1919755835e6ff97f8c910a697d5f3961536d8bb636539",
+        "vocab.json": "8d47330a74c0001e1f47d6e4391446c41cf8df57b17958bea4ccd8c5f4b288ac"
+      },
+      "mirror": {
+        "url": "https://github.com/uriocallaghan/subtitols-catala-en-directe/releases/download/packs-1.0/lang-eu.aar",
+        "sha256": "2f5fe17bdd5f57c7565382f3daca4223c9c1d9eb87853f4e47be7f05df0304dc",
+        "bytes": 169543001
+      }
+    },
+    {
+      "id": "es",
+      "name": "Español",
+      "stage": "stable",
+      "locales": [
+        "es"
+      ],
+      "assetPack": "lang-es",
+      "model": "fastconformer-es",
+      "punctuation": null,
+      "approximateDownloadBytes": 124000000,
+      "notes": "Language pack: NVIDIA FastConformer (CC-BY-4.0), which writes its own marks and capitals; read by RecognizerPunctuation; downloaded on demand (Apple-hosted pack, then the GitHub mirror) on iPhone and Mac.",
+      "mirror": {
+        "url": "https://github.com/uriocallaghan/subtitols-catala-en-directe/releases/download/packs-1.0/lang-es.aar",
+        "sha256": "52a1578a4e2dc7708358f6282f3a379de05c95e0141929c740c291733b7de068",
+        "bytes": 122935882
+      }
+    },
+    {
+      "id": "en",
+      "name": "English",
+      "stage": "stable",
+      "locales": [
+        "en"
+      ],
+      "assetPack": "lang-en",
+      "model": "fastconformer-en",
+      "punctuation": null,
+      "approximateDownloadBytes": 124000000,
+      "notes": "Language pack: NVIDIA FastConformer (CC-BY-4.0), which writes its own marks and capitals; read by RecognizerPunctuation; downloaded on demand (Apple-hosted pack, then the GitHub mirror) on iPhone and Mac.",
+      "mirror": {
+        "url": "https://github.com/uriocallaghan/subtitols-catala-en-directe/releases/download/packs-1.0/lang-en.aar",
+        "sha256": "d559d73dccbbacf9aba1e8b30d80a79d591719542b03b574629c1d983639ba30",
+        "bytes": 122964376
+      }
+    }
+  ],
+  "packMirror": {
+    "notes": "languages[].mirror: the .aar written by stage-ios-resources.sh --asset-packs (the file uploaded to App Store Connect), published as a GitHub release asset. The app fetches it only when the App Store's pack fails or stalls, verifies the SHA-256 of the whole archive, then unpacks Contents/<id>. The Mac App Store app bundles every language (Languages/<id>), the iPhone app bundles English; those never download. Re-run --asset-packs, then update sha256 and bytes here and upload the new .aar to the release, whenever a pack changes."
   }
 }

@@ -1,0 +1,23 @@
+--- a/src/asr/CMakeLists.txt	2026-09-26 16:38:11
++++ b/src/asr/CMakeLists.txt	2026-09-26 16:38:11
+@@ -18,7 +18,10 @@
+ # (nemo_speech_asr_c) below, not the default-visibility C++ lib.
+ list(REMOVE_ITEM ASR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/c_api.cpp")
+ 
+-add_library(nemo_speech_asr SHARED ${ASR_SOURCES})
++# iOS apps link the runtime statically (no bare dylibs in an app bundle), so
++# the library type can be overridden; SHARED stays the default.
++set(NEMO_SPEECH_ASR_LIBRARY_TYPE SHARED CACHE STRING "SHARED or STATIC")
++add_library(nemo_speech_asr ${NEMO_SPEECH_ASR_LIBRARY_TYPE} ${ASR_SOURCES})
+ 
+ if(NEMO_SPEECH_GGML_PATCHED)
+     target_compile_definitions(nemo_speech_asr PRIVATE NEMO_SPEECH_GGML_PATCHED=1)
+@@ -166,7 +169,7 @@
+ # so only the nemo_speech_asr_* symbols are exported; the C++ implementation is linked
+ # in privately. This is the installed binary contract.
+ # ---------------------------------------------------------------------------
+-add_library(nemo_speech_asr_c SHARED c_api.cpp)
++add_library(nemo_speech_asr_c ${NEMO_SPEECH_ASR_LIBRARY_TYPE} c_api.cpp)
+ target_link_libraries(nemo_speech_asr_c PRIVATE nemo_speech_asr)
+ target_include_directories(nemo_speech_asr_c PUBLIC
+     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>

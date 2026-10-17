@@ -30,6 +30,7 @@ final class DiagnosticCapture: @unchecked Sendable {
         let schemaVersion: Int
         let startedAt: Date
         let profile: String
+        let model: String
         let audioFormat: String
         let privacy: String
     }
@@ -42,10 +43,16 @@ final class DiagnosticCapture: @unchecked Sendable {
     private var lastAudioSequence: UInt64 = 0
 
     static func configuredFromEnvironment() -> DiagnosticCapture? {
+        // The App Store build (Xcode target, SUBTITOL_STORE) reads no paths from the
+        // environment outside Debug: the sandbox would deny them anyway.
+        #if SUBTITOL_STORE && !DEBUG
+        return nil
+        #else
         guard let path = ProcessInfo.processInfo.environment["SUBTITOL_DIAGNOSTICS_DIR"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !path.isEmpty else { return nil }
         return DiagnosticCapture(rootURL: URL(fileURLWithPath: path, isDirectory: true))
+        #endif
     }
 
     init(rootURL: URL) {
@@ -55,7 +62,7 @@ final class DiagnosticCapture: @unchecked Sendable {
         encoder.outputFormatting = [.sortedKeys]
     }
 
-    func begin(profile: TranscriptionProfile) -> Bool {
+    func begin(profile: TranscriptionProfile, modelIdentifier: String) -> Bool {
         queue.sync {
             closeFiles()
             do {
@@ -88,9 +95,10 @@ final class DiagnosticCapture: @unchecked Sendable {
                 observationHandle = try FileHandle(forWritingTo: observationsURL)
                 lastAudioSequence = 0
                 let session = SessionRecord(
-                    schemaVersion: 1,
+                    schemaVersion: 2,
                     startedAt: Date(),
                     profile: profile.rawValue,
+                    model: modelIdentifier,
                     audioFormat: "mono Float32 little-endian; sample rate in every observation",
                     privacy: "Explicit opt-in via SUBTITOL_DIAGNOSTICS_DIR"
                 )

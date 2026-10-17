@@ -15,6 +15,10 @@ import Foundation
 /// and 9 full-block reversals; hanging from settled text instead leaves 5 and 0, and the
 /// 5 are the intended roll-ups.
 ///
+/// A word that opens a paragraph (the speaker ended a sentence and paused, or another
+/// voice took over) starts a new line after a blank one, so each voice or thought stands
+/// apart and begins at the left edge where the eye returns to.
+///
 /// Settled placements are computed once and never recomputed. The recognizer cannot
 /// revise them — across 1052 observations of committed words in that stream none changed
 /// text and none disappeared — but if one ever does, `update` rebuilds rather than leave
@@ -68,9 +72,13 @@ public struct RollUpTranscriptLayout: Sendable {
     /// provisional hypothesis: doing so would move the entire reading block.
     public static let baseReserve = 2
 
-    /// How many settled words to keep placed. Far more than any pane can show, but
-    /// bounded, so a long session cannot grow the array without limit.
-    private static let settledCapacity = 160
+    /// Blank lines between paragraphs.
+    public static let paragraphGapLines = 1
+
+    /// How many settled words to keep placed: the history the phone can scroll back
+    /// through, some ten minutes of speech. Only the rows in view are drawn, and the
+    /// bound keeps a long session from growing the array without limit.
+    private static let settledCapacity = 1_500
 
     public private(set) var placements: [Placement] = []
 
@@ -141,8 +149,8 @@ public struct RollUpTranscriptLayout: Sendable {
         var x = cursorX
         for index in words.indices where words[index].anchor > settledThrough {
             let width = widths[index]
-            if x > 0, x + width > newMetrics.maxWidth {
-                line += 1
+            if x > 0, words[index].startsParagraph || words[index].startsLine || x + width > newMetrics.maxWidth {
+                line += 1 + (words[index].startsParagraph ? Self.paragraphGapLines : 0)
                 x = 0
             }
             // A provisional word that would exceed the fixed lane remains in the
@@ -199,8 +207,8 @@ public struct RollUpTranscriptLayout: Sendable {
         for index in words.indices
         where words[index].isCommitted && words[index].anchor > settledThrough {
             let width = widths[index]
-            if cursorX > 0, cursorX + width > metrics.maxWidth {
-                anchorLine += 1
+            if cursorX > 0, words[index].startsParagraph || words[index].startsLine || cursorX + width > metrics.maxWidth {
+                anchorLine += 1 + (words[index].startsParagraph ? Self.paragraphGapLines : 0)
                 cursorX = 0
             }
             settled.append(
