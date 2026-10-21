@@ -1,6 +1,6 @@
 .DS_Store
 
-# Models i runtime local (no es commitegen: 1,1 GB i arbre de build)
+# Models i runtime local (no es commitegen: ~0,65 GB per model i arbre de build)
 models/
 *.gguf
 .work/
@@ -14,3 +14,12 @@ diagnostics/
 
 # Assets de treball
 *.tmp
+
+# Local Netlify folder
+.netlify
+
+# Xcode per usuari (el projecte d'iPhone es genera amb XcodeGen)
+SubtitolLive/iOS/*.xcodeproj/xcuserdata/
+SubtitolLive/iOS/*.xcodeproj/project.xcworkspace/xcuserdata/
+.app-store-audit/
+SubtitolLive/.build-testrelease/

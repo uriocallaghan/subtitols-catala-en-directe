@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ca" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Català ASR</title>
+<meta name="description" content="Subtítols en català en directe. Toca la pantalla i parla.">
+<meta name="theme-color" content="#fafafa">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Català ASR">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css?v=6">
+</head>
+<body>
+<main id="app">
+  <section id="reader" aria-label="Transcripció en directe">
+    <div id="lines" aria-live="polite"><span id="status" class="status">Quan parlis, el text apareixerà aquí.</span></div>
+  </section>
+
+  <aside id="deco">
+    <canvas id="viz" aria-hidden="true"></canvas>
+    <div class="controls">
+      <button id="theme" class="pill round" type="button" aria-label="Canvia el tema"><span aria-hidden="true"></span></button>
+      <button id="pill" class="pill" type="button" data-state="idle"><i class="dot" aria-hidden="true"></i><span id="pill-label">Toca per començar</span></button>
+    </div>
+  </aside>
+</main>
+
+<pre id="debug" hidden></pre>
+
+<script src="/app.js?v=6" defer></script>
+</body>
+</html>

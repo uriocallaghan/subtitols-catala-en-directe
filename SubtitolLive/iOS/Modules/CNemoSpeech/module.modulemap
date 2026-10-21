@@ -1,0 +1,4 @@
+module CNemoSpeech {
+    header "../../../Sources/CNemoSpeech/include/Bridge.h"
+    export *
+}

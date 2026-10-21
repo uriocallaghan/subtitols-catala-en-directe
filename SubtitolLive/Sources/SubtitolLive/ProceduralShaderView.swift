@@ -29,7 +29,7 @@ struct ProceduralShaderView: NSViewRepresentable {
 
 final class MetalNoiseView: MTKView {
     private static let idleFramesPerSecond = 12
-    private static let recordingFramesPerSecond = 30
+    private static let recordingFramesPerSecond = 60
     private static let fallbackColor = MTLClearColor(red: 1, green: 0.42, blue: 0, alpha: 1)
 
     private var renderer: MetalNoiseRenderer?
@@ -289,6 +289,8 @@ private enum ShaderLog {
 private enum ShaderResources {
     private static let bundleName = "SubtitolLive_SubtitolLive.bundle"
 
+    /// SwiftPM builds put the shader in `SubtitolLive_SubtitolLive.bundle`; the Xcode
+    /// (App Store) target copies `ProceduralNoise.metal` straight into the app's resources.
     static let bundle: Bundle? = {
         let installed = Bundle.main.resourceURL?.appendingPathComponent(bundleName)
         let development = Bundle.main.executableURL?
@@ -298,6 +300,6 @@ private enum ShaderResources {
             .compactMap { $0 }
             .lazy
             .compactMap(Bundle.init(url:))
-            .first
+            .first ?? Bundle.main
     }()
 }

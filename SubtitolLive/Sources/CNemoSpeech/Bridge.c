@@ -4,12 +4,50 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 #include "../../Vendor/Runtime/include/nemo_speech/asr.h"
 
 struct stl_engine {
     nemo_speech_asr_recognizer* recognizer;
+    // Boosted phrases, owned here; read on every transcription.
+    char** phrases;
+    size_t phrase_count;
+    float boost;
 };
+
+static void free_phrases(stl_engine* engine) {
+    if (!engine || !engine->phrases) {
+        return;
+    }
+    for (size_t i = 0; i < engine->phrase_count; ++i) {
+        free(engine->phrases[i]);
+    }
+    free(engine->phrases);
+    engine->phrases = NULL;
+    engine->phrase_count = 0;
+}
+
+void stl_engine_set_phrases(stl_engine* engine, const char* const* phrases, size_t count, float boost) {
+    if (!engine) {
+        return;
+    }
+    free_phrases(engine);
+    engine->boost = boost;
+    if (!phrases || count == 0) {
+        return;
+    }
+    engine->phrases = (char**)calloc(count, sizeof(char*));
+    if (!engine->phrases) {
+        return;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        engine->phrases[i] = strdup(phrases[i] ? phrases[i] : "");
+    }
+    engine->phrase_count = count;
+}
 
 struct stl_result {
     nemo_speech_asr_result* result;
@@ -30,7 +68,7 @@ static double monotonic_milliseconds(void) {
 
 stl_engine* stl_engine_create(const char* model_path, char* error, size_t error_capacity) {
     if (!model_path || model_path[0] == '\0') {
-        copy_string(error, error_capacity, "No s'ha trobat el model de català.");
+        copy_string(error, error_capacity, "No s'ha trobat el model de veu.");
         return NULL;
     }
 
@@ -42,7 +80,12 @@ stl_engine* stl_engine_create(const char* model_path, char* error, size_t error_
 
     nemo_speech_asr_backend_config backend = {0};
     backend.size = sizeof(backend);
+#if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
+    // The iOS Simulator's runtime is built without Metal (see build-ios-runtime.sh).
+    backend.gpu = -1;
+#else
     backend.gpu = 0;
+#endif
 
     nemo_speech_asr_model_config model = {0};
     model.size = sizeof(model);
@@ -69,6 +112,7 @@ void stl_engine_destroy(stl_engine* engine) {
         return;
     }
     nemo_speech_asr_destroy(engine->recognizer);
+    free_phrases(engine);
     free(engine);
 }
 
@@ -96,6 +140,15 @@ int stl_engine_transcribe(
     options.interim_results = false;
     options.enable_word_time_offsets = true;
     options.enable_automatic_punctuation = false;
+    nemo_speech_asr_speech_context context = {0};
+    if (engine->phrases && engine->phrase_count > 0) {
+        context.size = sizeof(context);
+        context.phrases = (const char* const*)engine->phrases;
+        context.phrase_count = engine->phrase_count;
+        context.boost = engine->boost;
+        options.speech_contexts = &context;
+        options.speech_context_count = 1;
+    }
 
     nemo_speech_asr_result* result = NULL;
     const double started = monotonic_milliseconds();

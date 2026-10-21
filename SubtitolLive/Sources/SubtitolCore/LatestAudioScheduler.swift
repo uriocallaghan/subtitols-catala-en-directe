@@ -1,5 +1,5 @@
 public struct LatestAudioScheduler: Sendable {
-    public let minimumHopSamples: UInt64
+    public private(set) var minimumHopSamples: UInt64
     public private(set) var isInFlight = false
 
     private var lastSubmittedSequence: UInt64 = 0
@@ -25,6 +25,11 @@ public struct LatestAudioScheduler: Sendable {
         guard hasPendingAudio else { return nil }
         hasPendingAudio = false
         return submitIfReady(sequence: latestSequence)
+    }
+
+    /// Takes effect from the next submission; the one in flight is left alone.
+    public mutating func setMinimumHopSamples(_ samples: UInt64) {
+        minimumHopSamples = max(1, samples)
     }
 
     public mutating func alignInFlightSnapshot(sequence: UInt64) {
