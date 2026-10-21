@@ -788,6 +788,10 @@ struct MirrorPackSource: LanguagePackSource {
 
     func install(_ pack: LanguagePack, progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let mirror = pack.language.mirror else { throw PackMirrorMissing() }
+        // Leaving the app mid-download keeps it going for as long as iOS allows; past
+        // that, PackDownload resumes from where it stopped on return.
+        let background = await BackgroundTime(name: "language download")
+        defer { Task { @MainActor in background.end() } }
         let staging = try library.makeStagingFolder(for: pack)
         defer { try? FileManager.default.removeItem(at: staging) }
         let archive = staging.appendingPathComponent("pack.aar")
@@ -852,6 +856,31 @@ struct MirrorPackSource: LanguagePackSource {
     }
 }
 
+/// Extra time iOS gives an app that leaves the screen mid-task (about half a minute);
+/// nothing on the Mac.
+@MainActor
+final class BackgroundTime {
+    #if os(iOS)
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+    #endif
+
+    init(name: String) {
+        #if os(iOS)
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+        #endif
+    }
+
+    func end() {
+        #if os(iOS)
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+        #endif
+    }
+}
+
 struct PackMirrorMissing: Error {}
 struct PackArchiveCorrupt: Error {}
 struct PackArchiveUnreadable: Error {}
@@ -861,7 +890,39 @@ struct PackMirrorStatus: Error { let code: Int }
 /// writes it; the file is moved into place the moment the task hands it over, before
 /// the system can delete it.
 enum PackDownload {
+    /// Times an interrupted download is resumed (the iPhone suspends it a while after the
+    /// app leaves the screen; GitHub's file host answers range requests).
+    static let resumeAttempts = 3
+
     static func fetch(_ url: URL, to destination: URL, expectedBytes: Int64, progress: @escaping @Sendable (Double) -> Void) async throws {
+        var resumeData: Data?
+        var attempts = 0
+        while true {
+            do {
+                try await fetchOnce(url, resumeData: resumeData, to: destination, expectedBytes: expectedBytes, progress: progress)
+                return
+            } catch {
+                let partial = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                attempts += 1
+                guard !Task.isCancelled, let partial, attempts <= resumeAttempts else { throw error }
+                packLog("download interrupted, resuming (\(attempts))")
+                resumeData = partial
+                await waitUntilActive()
+                try Task.checkCancellation()
+            }
+        }
+    }
+
+    /// Returns once the app is on screen again (at once on the Mac).
+    private static func waitUntilActive() async {
+        #if os(iOS)
+        while !Task.isCancelled, await MainActor.run(body: { UIApplication.shared.applicationState != .active }) {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        #endif
+    }
+
+    private static func fetchOnce(_ url: URL, resumeData: Data?, to destination: URL, expectedBytes: Int64, progress: @escaping @Sendable (Double) -> Void) async throws {
         let delegate = Delegate(destination: destination, expectedBytes: expectedBytes, progress: progress)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 60
@@ -871,7 +932,7 @@ enum PackDownload {
         defer { session.finishTasksAndInvalidate() }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        let task = session.downloadTask(with: request)
+        let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: request)
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 delegate.continuation = continuation

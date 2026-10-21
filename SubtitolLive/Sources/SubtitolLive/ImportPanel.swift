@@ -14,13 +14,17 @@ struct ImportButton: View {
     /// 0...1 while a job runs; `nil` otherwise.
     var progress: Double?
     var isFinished = false
+    /// How strong the glyph is at rest (stronger on the iPhone's glass).
+    var restingOpacity = 0.34
+    /// The button's square side: 44 on its own, a knob inside a bar's well.
+    var side: CGFloat = 44
     let action: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            ImportGlyphLabel(ink: ink, size: size, progress: progress, isFinished: isFinished, isHovered: isHovered)
+            ImportGlyphLabel(ink: ink, size: size, progress: progress, isFinished: isFinished, isHovered: isHovered, restingOpacity: restingOpacity, side: side)
         }
         .buttonStyle(PressableButtonStyle())
         .onHover { hovering in
@@ -40,6 +44,8 @@ struct ImportGlyphLabel: View {
     var progress: Double?
     var isFinished = false
     var isHovered = false
+    var restingOpacity = 0.34
+    var side: CGFloat = 44
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -56,11 +62,11 @@ struct ImportGlyphLabel: View {
             }
             Image(systemName: isFinished ? "captions.bubble" : "photo.on.rectangle")
                 .font(.system(size: size * (progress == nil ? 1 : 0.78), weight: .regular))
-                .foregroundStyle(ink.opacity(isHovered || progress != nil ? 0.62 : 0.34))
+                .foregroundStyle(ink.opacity(isHovered || progress != nil ? max(0.62, restingOpacity) : restingOpacity))
                 .contentTransition(.symbolEffect(.replace))
         }
-        .frame(width: size * 1.9, height: size * 1.9)
-        .frame(width: 44, height: 44)
+        .frame(width: min(size * 1.9, side), height: min(size * 1.9, side))
+        .frame(width: side, height: side)
         .contentShape(Rectangle())
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.8), value: progress == nil)
     }

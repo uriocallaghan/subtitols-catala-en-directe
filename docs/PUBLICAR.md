@@ -12,6 +12,31 @@ Tot el que has de pujar és a l'Escriptori, a la carpeta **`duna - per pujar`**:
 
 ---
 
+## Versió 1.1 (21 d'octubre): enviada a revisió
+
+La 1.0 ja és a la venda (iPhone i Mac). La 1.1 (compilació 8) es va pujar i enviar a revisió el 21 d'octubre, amb textos, notes i les 30 captures noves. Es publica sola quan Apple l'aprovi.
+
+## Compilació 8 (20 d'octubre): editor, transcripcions desades i vocabulari
+
+L'auditoria del 20 d'octubre (`.app-store-audit/`) va trobar el que calia arreglar abans d'enviar aquesta versió, i ja està fet:
+- el número de compilació passa a **8** (la 7 ja està pujada);
+- les notes per al revisor i les descripcions de la fitxa expliquen l'app d'avui (`APP-STORE-FITXA.md`);
+- la política de privacitat, el suport i les condicions d'ús diuen que les transcripcions i les correccions es guarden a l'aparell, i que els vídeos amb subtítols es desen a Fotos;
+- a l'iPhone, la baixada de GitHub continua una estona si surts de l'app, i si s'atura, es reprèn on era quan tornes.
+- ✅ la web nova és publicada (21 d'octubre) i ja no porta l'script de la insígnia de Netlify;
+- ✅ les compilacions 8 són a `duna - per pujar/1 Apps` (la 7 es conserva a `.work/store-archives/export-7`) i a l'Organizer de Xcode ("duna iPhone 1.0 (8)", "duna Mac 1.0 (8)");
+- ✅ les notes ja no porten cap telèfon: el revisor té el correu.
+
+Els teus passos:
+1. 👤 **Mira a App Store Connect com està la 1.0 (7).** Si encara és en revisió, treu-la de revisió (*Remove from Review*). Si ja l'han aprovada i publicada, avisa'm: la nova ha de ser la 1.0.1, amb un text de novetats.
+2. 👤 **Posa el teu telèfon a App Review Information** (camp obligatori i privat: només el veu Apple). Les notes ja no el demanen.
+3. 👤 **Valida abans de pujar:** Xcode › Window › Organizer › arxiu "duna" 1.0 (8) › **Validate App**.
+4. 👤 **Puja les dues compilacions 8**. Tria la 8 a iOS i a macOS, enganxa les notes noves i les descripcions, i **afegeix els cinc paquets d'idioma a tots dos enviaments**.
+5. 👤 A **Pricing and Availability**, desactiva "iPhone and iPad apps on Apple silicon Macs" (ja hi ha l'app de Mac) i Apple Vision Pro.
+6. 👤 **Prova la 8 a TestFlight al Mac, partint de zero:** esborra l'app → baixa un idioma → dona el micròfon → parla. Prova també a dir que no al micròfon.
+
+---
+
 ## Rebuig del Mac (6 d'octubre) i compilació 7
 
 Apple va rebutjar la versió de Mac (compilació 6, norma 2.1a): en triar un idioma, la baixada fallava i l'app deia "torna-ho a provar". La causa és coneguda als fòrums d'Apple (fil 815174): l'entorn de revisió sovint no pot baixar els paquets allotjats per Apple, sobretot al Mac. L'estudi de les opcions és a `docs/ESTUDI-IDIOMES-MIDA.md`; la decisió va ser no ficar cap model dins l'app.

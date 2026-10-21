@@ -39,12 +39,16 @@ Totes les frases descriuen el que l'app fa avui. Cap no la presenta com un apare
 >
 > MORE THAN LIVE
 > • Make subtitles for a video or recording you already have: duna writes an .srt file on the device.
+> • Correct the subtitles line by line in an editor, then export the video with the captions burnt in (on iPhone it goes straight to Photos).
+> • Every transcription you stop is kept in a folder, where you can rename, edit and export it.
+> • Add names and terms to the vocabulary so they are recognised better.
 > • Export the transcript as text, Markdown or .srt subtitles.
+> • Share a video to duna from Photos, Files or any app to make its subtitles.
 > • Shortcuts actions, and a Control Center button on iPhone.
 >
 > LANGUAGES
 > • English, Spanish, Catalan, Galician and Basque. Galician and Basque are the newest and make more mistakes.
-> • The app stays small: pick a language and download it once (120–190 MB).
+> • The app stays small: pick a language and download it once (120–195 MB).
 > • The app itself speaks all five languages.
 >
 > duna is an automatic transcription and can make mistakes. It is not a hearing aid and does not replace professional captioning.
@@ -79,12 +83,16 @@ Totes les frases descriuen el que l'app fa avui. Cap no la presenta com un apare
 >
 > MÉS QUE EN DIRECTE
 > • Fes els subtítols d'un vídeo o d'un àudio que ja tinguis: duna en fa un fitxer .srt al mateix aparell.
+> • Corregeix els subtítols línia a línia en un editor i exporta el vídeo amb els subtítols gravats (a l'iPhone va directe a Fotos).
+> • Cada transcripció que atures es guarda en una carpeta, on la pots reanomenar, editar i exportar.
+> • Afegeix noms i termes al vocabulari perquè es reconeguin millor.
 > • Exporta la transcripció en text, Markdown o subtítols .srt.
+> • Comparteix un vídeo amb duna des de Fotos, Fitxers o qualsevol app per fer-ne els subtítols.
 > • Accions per a l'app Dreceres, i un botó al Centre de control de l'iPhone.
 >
 > IDIOMES
 > • Català, castellà, anglès, gallec i basc. El gallec i el basc són els més nous i s'equivoquen més.
-> • L'app és lleugera: tries l'idioma i el baixes una sola vegada (de 120 a 190 MB).
+> • L'app és lleugera: tries l'idioma i el baixes una sola vegada (de 120 a 195 MB).
 > • L'app també es pot fer servir en aquests cinc idiomes.
 >
 > duna és una transcripció automàtica i pot tenir errors. No és un audiòfon ni substitueix un servei professional de subtitulació.
@@ -119,17 +127,46 @@ Totes les frases descriuen el que l'app fa avui. Cap no la presenta com un apare
 >
 > MÁS QUE EN DIRECTO
 > • Haz los subtítulos de un vídeo o un audio que ya tengas: duna crea un archivo .srt en el propio dispositivo.
+> • Corrige los subtítulos línea a línea en un editor y exporta el vídeo con los subtítulos grabados (en el iPhone va directo a Fotos).
+> • Cada transcripción que detienes se guarda en una carpeta, donde puedes renombrarla, editarla y exportarla.
+> • Añade nombres y términos al vocabulario para que se reconozcan mejor.
 > • Exporta la transcripción en texto, Markdown o subtítulos .srt.
+> • Comparte un vídeo con duna desde Fotos, Archivos o cualquier app para hacer sus subtítulos.
 > • Acciones para la app Atajos, y un botón en el Centro de control del iPhone.
 >
 > IDIOMAS
 > • Español, catalán, inglés, gallego y euskera. Gallego y euskera son los más nuevos y se equivocan más.
-> • La app es ligera: eliges el idioma y lo descargas una sola vez (de 120 a 190 MB).
+> • La app es ligera: eliges el idioma y lo descargas una sola vez (de 120 a 195 MB).
 > • La app también se puede usar en estos cinco idiomas.
 >
 > duna es una transcripción automática y puede tener errores. No es un audífono ni sustituye un servicio profesional de subtitulado.
 
 **Palabras clave** (100): `subtítulos,transcripción,sordos,sordera,accesibilidad,voz a texto,reunión,directo,srt,euskera`
+
+---
+
+## Novetats de la versió 1.1 (What's New)
+
+**English (U.S.):**
+> • Correct the subtitles of a video line by line: split, join, add a missed line, find and replace.
+> • Export the video with the captions burnt in: choose 1, 2 or 3 words at a time, size, typeface, shadow and position. On iPhone it goes straight to Photos.
+> • Every transcription you stop is kept in a new folder, where you can rename, edit and export it.
+> • Vocabulary: add today's names and terms so they come out right.
+> • More reliable language downloads.
+
+**Català:**
+> • Corregeix els subtítols d'un vídeo línia a línia: parteix, ajunta, afegeix una línia perduda, cerca i substitueix.
+> • Exporta el vídeo amb els subtítols gravats: 1, 2 o 3 paraules alhora, mida, tipografia, ombra i posició. A l'iPhone va directe a Fotos.
+> • Cada transcripció que atures es guarda en una carpeta nova, on la pots reanomenar, editar i exportar.
+> • Vocabulari: afegeix els noms i termes del dia perquè surtin bé.
+> • Baixades d'idiomes més fiables.
+
+**Castellano:**
+> • Corrige los subtítulos de un vídeo línea a línea: divide, une, añade una línea perdida, busca y reemplaza.
+> • Exporta el vídeo con los subtítulos grabados: 1, 2 o 3 palabras a la vez, tamaño, tipografía, sombra y posición. En el iPhone va directo a Fotos.
+> • Cada transcripción que detienes se guarda en una carpeta nueva, donde puedes renombrarla, editarla y exportarla.
+> • Vocabulario: añade los nombres y términos del día para que salgan bien.
+> • Descargas de idiomas más fiables.
 
 ---
 
@@ -180,40 +217,48 @@ Són opcionals. Recomanació: no les omplis en aquesta primera versió. Declara-
 - **Sign-in required:** No.
 - **Contacte:**
   - el teu nom;
-  - el teu telèfon, amb prefix +34;
+  - el teu telèfon, amb prefix +34. És un camp obligatori, però **privat**: només el veu l'equip de revisió d'Apple, no surt mai a la botiga;
   - `info@uriocallaghan.com`.
-- **Notes** (en anglès, copia-les tal qual; canvia el telèfon):
+- **Notes** (en anglès, copia-les tal qual):
 
-> duna transcribes speech live, entirely on device (iPhone and Mac). It is free, with no account, sign-in, ads or in-app purchases.
+> duna transcribes speech live, entirely on device (iPhone and Mac, one universal purchase). Free: no account, sign-in, ads, tracking or in-app purchases.
 >
-> SPEECH MODELS ARE DOWNLOADS, NOT CODE. The binary contains the whole app, every feature and all five interface localizations. Only the speech-recognition models are downloaded: five Apple-hosted on-demand asset packs (lang-en, lang-es, lang-ca, lang-gl, lang-eu; 120–190 MB each), attached to this submission, the same on iPhone and Mac. Nothing downloads until the user taps a Download button that shows the size (4.2.3). They contain model weights and vocabularies only, no executable code (2.5.2), and add no features: without one, the app shows its language list.
+> LANGUAGE DOWNLOADS (data, not code). The binary holds every feature and all five interface languages. Only speech models are downloaded: five Apple-hosted asset packs (lang-en, lang-es, lang-ca, lang-gl, lang-eu, 120-195 MB each), attached to this submission. Nothing downloads until the user taps a button showing the size. If the App Store cannot deliver a pack (lookup over 15 s, error, or no progress for 20 s), the app fetches the identical archive over HTTPS from our public GitHub release (github.com/uriocallaghan/subtitols-catala-en-directe/releases, tag packs-1.0), checks its pinned SHA-256 and installs it. This is the app's only network code (Mac: network-client entitlement). Audio and text never leave the device.
 >
-> FALLBACK FOR THE DOWNLOAD (new in this build, after the previous rejection). If the App Store cannot deliver a pack (lookup fails, the download errors or shows no progress for 20 s), the app automatically fetches the identical archive over HTTPS from our public GitHub release (github.com/uriocallaghan/subtitols-catala-en-directe/releases, tag packs-1.0), verifies its SHA-256 against the value pinned in the app, and installs it. The user sees one progress bar either way. This is the app's only network code; the Mac build carries the network-client sandbox entitlement for it. Audio and text never leave the device.
+> FIRST RUN (iPhone and Mac)
+> 1. Choose the interface language, then "Let's go".
+> 2. Your device's language is preselected. Tap "Download · 123 MB" and keep duna open until it is installed (about a minute on Wi-Fi). Progress fills the button; then it reads "Continue". If it fails: "Try again" or "Continue without a language".
+> 3. Microphone: Continue, then Allow. If you choose Don't Allow, tap "Not now": video subtitles work without it.
 >
-> HOW TO TEST (iPhone and Mac)
-> 1. Screen 1: choose the interface language, then "Let's go".
-> 2. Screen 2: English is preselected. Tap "Download · 124 MB". The download continues in the background.
-> 3. Screen 3: tap Continue, then Allow in the system microphone prompt. When the model is ready (about a minute on Wi-Fi) the reading screen opens.
-> 4. Tap/click anywhere and speak, or play any spoken video nearby. Punctuated text appears live. Tap again to stop.
-> 5. Share icon (top right): export .txt, .md or .srt. Gallery icon (top left; on Mac also File > Subtitles for a Video…, ⌘O): make .srt subtitles for a video.
-> If you decline the microphone, tap "Not now". Video subtitles still work without it.
+> LIVE TRANSCRIPTION
+> Tap/click anywhere and speak, or play a spoken video nearby. Tap again to stop. The bar then shows Discard · Export · Save: Export writes .txt, .md or .srt; Save keeps it in the transcripts folder (it is kept there as soon as you stop).
+> Settings bar, gear: Language (add or delete languages), Microphone (choose the input), Vocabulary (names and terms to recognise better), Info on iPhone (privacy, disclaimer, credits, links). Mac: the same pills; links in the Help menu.
 >
-> IF THE DOWNLOAD DOES NOT COMPLETE: the app says why in a short code and offers "Try again" and "Continue without a language"; the language list stays available from the gear button → Language. Please contact us before deciding (+34 XXX XXX XXX, info@uriocallaghan.com): we can do a call or a screen share at any time, and the code on screen tells us exactly what happened.
+> SAVED TRANSCRIPTS
+> iPhone: folder icon, top right. Mac: folder icon in the small bar to the right of the settings bar, or File > Transcripts (Shift-Cmd-T). List by day with search; open one to edit its title and text, change size or typeface, or export.
+>
+> SUBTITLES FOR A VIDEO OR RECORDING
+> iPhone: gallery icon, top left (Photos or Files), or "duna" in the Share sheet. Mac: gallery icon next to the folder, File > Subtitles for a Video... (Cmd-O), or drop a file on the window. Any video with speech works. Choose the language; an .srt is made on the device and the subtitle editor opens.
+> Editor: tap a line to correct it while it plays; buttons split, join, add a missed line, delete; magnifier = find and replace (Mac Cmd-F). Caption style: Aa on iPhone, under the film on Mac. Export: "Video" makes a copy with burnt-in captions (iPhone saves it to Photos after the add-only Photos prompt, and offers Share; Mac offers Save..., AirDrop, Share), or ".srt file" (subtitles and text).
+>
+> PERMISSIONS
+> Microphone: live transcription only. Photos (add-only, iPhone): only when a captioned video is saved. Mac sandbox: user-selected files (videos, exports) and network client (language mirror). No background modes.
 >
 > OTHER
-> • "New" next to Galician and Basque means those two models are the most recent and less accurate. The app is a complete release.
-> • duna is not a medical device or hearing aid. The app says so (Info screen) and so does the description.
-> • The iPhone share extension ("duna" in the Share sheet, video/audio only) saves the file in the app group and asks the user to open duna, which then makes the subtitles. It does not open the app itself.
-> • Privacy policy: https://duna.uriocallaghan.com/en/privacy. It is also in the app: Info on iPhone, the Help menu on Mac.
+> - Shortcuts actions (start/stop, get text, save to file, change language, subtitles for a video) and, on iPhone, a Control Center / Lock Screen / Action button control that opens the app and starts listening.
+> - The Share extensions (iPhone and Mac, video/audio only) hand the file to duna. On iPhone it only copies the video into the app group and asks the user to open duna; it does not open the app itself.
+> - "New" next to Galician and Basque means those models are the most recent and less accurate. The app is a complete release.
+> - duna is not a hearing aid and does not replace professional captioning; the app (Info) and the description say so.
+> - Privacy policy: https://duna.uriocallaghan.com/en/privacy (also in the app: Info on iPhone, Help menu on Mac).
+>
+> If a download does not complete in your network, please contact us before deciding (info@uriocallaghan.com): we can do a call or screen share anytime.
 
 ---
 
 ## Captures de pantalla
 
-Són a l'Escriptori, a `duna - per pujar/3 Captures/`. Es van fer amb l'app real, transcrivint una veu sintètica.
+Són a l'Escriptori, a `duna - per pujar/3 Captures/` (refetes el 21 d'octubre, direcció 1 · Blanc; les del 30 de setembre són a `antigues (30 de setembre)`).
 
-- **iPhone 6,9"** (1320 × 2868), a `iPhone 6,9/en`, `es` i `ca`:
-  - en anglès i en castellà, 6 captures: lectura, fosc, exportar, idiomes, ajustaments i benvinguda;
-  - en català, 5.
-- **Mac** (2880 × 1800), a `Mac/en`, `es` i `ca`: 4 captures per idioma (lectura, fosc amb Atkinson, idiomes i benvinguda).
-- Cap captura té canal alfa, com exigeix Apple. Puja-les en l'ordre del número.
+- **iPhone 6,9"** (1320 × 2868), a `iPhone 6,9/en`, `ca` i `es`: 5 per idioma, dins el marc oficial de l'iPhone 18 Pro Max: lectura, fosc, la carpeta de transcripcions, l'editor de subtítols i la lletra grossa.
+- **Mac** (2880 × 1800), a `Mac/en`, `ca` i `es`: 5 per idioma, amb el MacBook Pro oficial i els mateixos cinc temes.
+- Són captures reals de l'app d'avui; només el text que es llegeix a la pantalla de lectura s'hi ha posat amb el disseny exacte de l'app (temes de startups, inventats). Cap no té canal alfa. Puja-les en l'ordre del número.

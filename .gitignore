@@ -21,3 +21,5 @@ diagnostics/
 # Xcode per usuari (el projecte d'iPhone es genera amb XcodeGen)
 SubtitolLive/iOS/*.xcodeproj/xcuserdata/
 SubtitolLive/iOS/*.xcodeproj/project.xcworkspace/xcuserdata/
+.app-store-audit/
+SubtitolLive/.build-testrelease/

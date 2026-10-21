@@ -23,7 +23,7 @@
 
 <main>
 <h1>Condiciones de uso</h1>
-<p class="dateline">duna para iPhone y Mac · en vigor desde el 30 de septiembre de 2026</p>
+<p class="dateline">duna para iPhone y Mac · en vigor desde el 20 de octubre de 2026</p>
 
 <p class="lede">Estas son las condiciones de uso de duna, una app para iPhone y Mac publicada por
 Oriol O'Callaghan. Descargar o usar la app significa aceptarlas.</p>
@@ -37,7 +37,8 @@ refiere a la licencia en sí, prevalece el texto de Apple.</p>
 <h2>Qué hace la app</h2>
 <p>duna convierte en texto, en directo, lo que capta el micrófono, y hace los subtítulos de los vídeos
 y audios que tú le das. Todo ocurre en tu dispositivo. Los idiomas (catalán, castellano, inglés,
-gallego y euskera) se descargan uno a uno desde los servidores de Apple cuando tú lo pides; la app
+gallego y euskera) se descargan uno a uno desde los servidores de Apple cuando tú lo pides (o, si fallan, desde una copia
+publicada en GitHub); la app
 muestra su tamaño antes de descargarlos.</p>
 
 <h2>Gratuita</h2>
@@ -78,15 +79,16 @@ también están dentro de la app, en la pantalla de información.</p>
     <li><strong>Voz en castellano e inglés:</strong> stt_es y stt_en_fastconformer_hybrid_large_pc, de
     NVIDIA. CC BY 4.0.</li>
     <li><strong>Voz en gallego:</strong> stt_los_conformer_transducer_large_punctuated, del Barcelona
-    Supercomputing Center. Apache 2.0.</li>
+    Supercomputing Center. <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a>.</li>
     <li><strong>Voz en euskera:</strong> stt_eu_conformer_transducer_large_v2, de HiTZ (UPV/EHU). Apache 2.0.</li>
     <li><strong>Puntuación:</strong> catalán, basado en distilroberta-base-ca-v2 del Projecte Aina
     (Apache 2.0); euskera, basado en BERnaT-medium de HiTZ (Apache 2.0), entrenado con ParlaMint y
     subtítulos de Open Data Euskadi (CC BY 4.0) y Common Voice.</li>
-    <li><strong>Cambios de voz:</strong> pyannote segmentation-3.0, de Hervé Bredin y colaboradores. MIT.</li>
+    <li><strong>Cambios de voz:</strong> pyannote segmentation-3.0, de Hervé Bredin y colaboradores.
+    <a href="https://opensource.org/license/mit">MIT</a>.</li>
     <li><strong>Motor de reconocimiento:</strong> NeMo-Speech.cpp y ggml. Apache 2.0 y MIT.</li>
     <li><strong>Tipografías:</strong> Inter (Rasmus Andersson) y Atkinson Hyperlegible Next y Mono
-    (Braille Institute of America). SIL Open Font License 1.1.</li>
+    (Braille Institute of America). <a href="https://openfontlicense.org">SIL Open Font License 1.1</a>.</li>
 </ul>
 <p>Los modelos se han convertido al formato que usa la app y se han comprimido (cuantizado); los
 modelos de puntuación catalán y euskera se han entrenado para duna a partir de los modelos base
@@ -95,7 +97,7 @@ citados. Ninguno de estos autores avala duna.</p>
 <h2>Lo que no prometo</h2>
 <p>duna se proporciona tal cual. No garantizo ningún nivel concreto de precisión, velocidad o
 disponibilidad, ni que la app no tenga errores, ni que siga funcionando después de una actualización
-del sistema. Los idiomas dependen de los servidores de Apple para descargarse la primera vez.</p>
+del sistema. Los idiomas dependen de los servidores de Apple, o de los de GitHub, para descargarse la primera vez.</p>
 <p>En la medida en que la ley lo permita, no respondo de pérdidas de datos, de beneficios ni de
 otros daños indirectos derivados del uso de la app. Nada de lo aquí dicho limita la responsabilidad
 que la ley no permite limitar, como la derivada de dolo o negligencia grave, o de daños a la vida o

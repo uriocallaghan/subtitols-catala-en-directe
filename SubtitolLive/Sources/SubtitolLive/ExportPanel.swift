@@ -154,7 +154,7 @@ struct ExportPanel: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(showsHeader ? localized("Exporta la sessió") : localized("Subtítols i text"))
+        .accessibilityLabel(showsHeader ? localized("Exporta la sessió") : localized("Arxiu .srt"))
         #if DEBUG
         .task {
             // Recordings of the knob: `-exportFormatTour YES` picks each format in turn.

@@ -72,6 +72,42 @@
           }
         }
       }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "comment": "Info.plist (never shown: the app asks only for add-only access)",
+      "extractionState": "manual",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duna només afegeix a Fotos els vídeos amb subtítols que facis. No llegeix mai la teva fototeca; els vídeos que tries arriben pel selector del sistema."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duna solo añade a Fotos los vídeos con subtítulos que hagas. Nunca lee tu fototeca; los vídeos que eliges llegan por el selector del sistema."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duna só engade a Fotos os vídeos con subtítulos que fagas. Nunca le a túa fototeca; os vídeos que escolles chegan polo selector do sistema."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duna-k egiten dituzun azpitituludun bideoak bakarrik gehitzen ditu Argazkiak-en. Ez du inoiz zure argazki-liburutegia irakurtzen; aukeratzen dituzun bideoak sistemaren hautatzailetik iristen dira."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duna only adds the subtitled videos you make to Photos. It never reads your library; videos you choose come through the system picker."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

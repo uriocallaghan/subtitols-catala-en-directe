@@ -242,6 +242,14 @@ final class SubtitleController: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Gives the screen back to the prompt once a stopped session has been kept or
+    /// discarded (the iPhone's Desa and Descarta); the next tap starts afresh.
+    func clearTranscript() {
+        guard state == .ready else { return }
+        session = SessionTranscript()
+        viewState = ViewState(mode: .ready, transcript: .init(), latency: latency, detail: detail)
+    }
+
     /// A start that failed (the microphone refused, no input device, a model that did not
     /// load) is not the end of the session: the next tap loads the language again and the
     /// one after that starts listening. Before, `.failed` stayed on screen with the surface

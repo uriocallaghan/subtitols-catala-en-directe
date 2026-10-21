@@ -72,6 +72,15 @@ struct SubtitleEditorView: View {
         .onChange(of: model.exportRequest) { _, _ in
             if !model.document.isEmpty { openExport(video: nil) }
         }
+        #if os(iOS)
+        // The copy goes to Photos by itself; if the card was closed while it was being
+        // made, it comes back to say so, unless the reader is busy with a line.
+        .onChange(of: model.photos) { _, photos in
+            guard photos != .saving, photos != .idle, !showsExport,
+                  model.editingLineID == nil, !model.isFinding else { return }
+            openExport(video: true)
+        }
+        #endif
         #if DEBUG
         .task { await runDebugSteps() }
         #endif
@@ -523,6 +532,10 @@ struct SubtitleEditorView: View {
         .accessibilityElement()
         .accessibilityLabel(model.job.hasVideo ? localized("Vídeo") : localized("Àudio"))
         .accessibilityHint(canPlaceCaption ? localized("Arrossega el subtítol per moure'l") : "")
+        // Without a pointer to drag with, VoiceOver can still bring a moved caption back.
+        .accessibilityAction(named: localized("Torna el subtítol al seu lloc")) {
+            if model.style.position != nil { model.placeCaption(at: nil, finished: true) }
+        }
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { model.togglePlayback() }
     }
@@ -786,21 +799,6 @@ private struct LyricsList: View {
                     if phase == .interacting || phase == .decelerating { scrolledByHandAt = Date() }
                 }
                 .mask(fade(height: proxy.size.height, typing: isCompact && model.editingLineID != nil))
-                // Until the first correction, a quiet line says what the lines are for;
-                // it leaves once the film has moved on.
-                .overlay(alignment: .topLeading) {
-                    let showsHint = !model.job.isEdited && model.editingLineID == nil && !model.isFinding
-                        && !model.document.isEmpty && (model.currentIndex ?? 0) < 2
-                    Text(Self.hint)
-                        .scaledFont(size: 13, weight: .medium, relativeTo: .footnote)
-                        .foregroundStyle(palette.ink.opacity(0.4))
-                        .padding(.horizontal, 20)
-                        .padding(.top, max(8, proxy.size.height * focus - fontSize * 2.2))
-                        .opacity(showsHint ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.35), value: showsHint)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
                 .overlay {
                     if model.document.isEmpty {
                         Text(localized("Aquest vídeo no té veus."))
@@ -861,12 +859,6 @@ private struct LyricsList: View {
             }
         }
     }
-
-    #if os(iOS)
-    static var hint: String { localized("Toca una frase per escoltar-la i corregir-la.") }
-    #else
-    static var hint: String { localized("Fes clic en una frase per escoltar-la i corregir-la.") }
-    #endif
 
     /// A row: a line of the document, or the missing line being written after one.
     private struct Row {
@@ -1457,8 +1449,9 @@ struct VideoExportPanel: View {
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.25) : ImportPanel.motion, value: phaseKey)
-        .animation(.easeInOut(duration: 0.25), value: model.savedToPhotos)
-        .animation(.easeInOut(duration: 0.25), value: model.photosError)
+        #if os(iOS)
+        .animation(reduceMotion ? .easeInOut(duration: 0.25) : .spring(response: 0.42, dampingFraction: 0.8), value: model.photos)
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityLabel(localized("Vídeo amb subtítols"))
     }
@@ -1559,6 +1552,35 @@ struct VideoExportPanel: View {
 
     private func finished(_ url: URL) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            #if os(iOS)
+            PhotosSaveRow(photos: model.photos, filename: url.lastPathComponent, palette: palette)
+
+            VStack(spacing: 8) {
+                if case .failed(let message, let denied) = model.photos {
+                    Text(message)
+                        .scaledFont(size: 13, relativeTo: .footnote)
+                        .foregroundStyle(palette.ink.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
+                    if denied {
+                        CardButton(title: localized("Obre Configuració"), symbol: "gear", isPrimary: true, palette: palette) {
+                            if let settings = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(settings) }
+                        }
+                        .transition(.opacity)
+                    } else {
+                        CardButton(title: localized("Desa a Fotos"), symbol: "photo.on.rectangle", isPrimary: true, palette: palette) {
+                            model.saveToPhotos()
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                ShareLink(item: url) {
+                    CardButtonLabel(title: localized("Comparteix"), symbol: "square.and.arrow.up", isPrimary: false, palette: palette)
+                }
+                .buttonStyle(PressableButtonStyle())
+            }
+            #else
             HStack(spacing: 12) {
                 Image(systemName: "checkmark")
                     .scaledFont(size: 14, weight: .bold, relativeTo: .body)
@@ -1581,28 +1603,6 @@ struct VideoExportPanel: View {
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.well))
 
             VStack(spacing: 8) {
-                #if os(iOS)
-                CardButton(
-                    title: model.savedToPhotos ? localized("Desat a Fotos") : localized("Desa a Fotos"),
-                    symbol: model.savedToPhotos ? "checkmark" : "photo.on.rectangle",
-                    isPrimary: true,
-                    palette: palette
-                ) {
-                    if !model.savedToPhotos { model.saveToPhotos() }
-                }
-                ShareLink(item: url) {
-                    CardButtonLabel(title: localized("Comparteix"), symbol: "square.and.arrow.up", isPrimary: false, palette: palette)
-                }
-                .buttonStyle(PressableButtonStyle())
-                if let error = model.photosError {
-                    Text(error)
-                        .scaledFont(size: 13, relativeTo: .footnote)
-                        .foregroundStyle(palette.ink.opacity(0.7))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .transition(.opacity)
-                }
-                #else
                 let actions = finishedActions(url)
                 ForEach(actions.filter(\.isPrimary)) { action in
                     CardButton(title: action.title, symbol: action.symbol, isPrimary: true, palette: palette) { action.perform(.subtitles) }
@@ -1616,8 +1616,8 @@ struct VideoExportPanel: View {
                     }
                     .buttonStyle(PressableButtonStyle())
                 }
-                #endif
             }
+            #endif
         }
     }
 
@@ -1633,6 +1633,111 @@ struct VideoExportPanel: View {
         }
     }
 }
+
+#if os(iOS)
+/// The finished copy on its way into Photos, then there: the circle fills with the app's
+/// orange, the photo turns into a tick, a ring of light spreads from it once and the
+/// phone taps, so nobody can miss where the video went.
+private struct PhotosSaveRow: View {
+    let photos: SubtitleEditorModel.PhotosSave
+    let filename: String
+    let palette: SettingsBarPalette
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var saved: Bool { photos == .saved }
+    private var saving: Bool { photos == .saving || photos == .idle }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            badge
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .scaledFont(size: 15, weight: .semibold, relativeTo: .body)
+                    .foregroundStyle(palette.ink)
+                    .contentTransition(.opacity)
+                Text(saved ? localized("El trobaràs a l'app Fotos.") : filename)
+                    .scaledFont(size: 12, relativeTo: .footnote)
+                    .foregroundStyle(palette.ink.opacity(0.56))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .contentTransition(.opacity)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(palette.well)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LanguageCircle.orange.opacity(saved ? 0.12 : 0))
+                )
+        }
+        .sensoryFeedback(.success, trigger: saved) { _, now in now }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var title: String {
+        switch photos {
+        case .idle, .saving: localized("Desant a Fotos…")
+        case .saved: localized("Desat a Fotos")
+        case .failed: localized("Vídeo a punt")
+        }
+    }
+
+    private var badge: some View {
+        ZStack {
+            // The ring of light: spreads once from the circle when the video lands.
+            if !reduceMotion {
+                Circle()
+                    .stroke(LanguageCircle.orange, lineWidth: 2)
+                    .frame(width: 34, height: 34)
+                    .keyframeAnimator(initialValue: Ring(), trigger: saved) { ring, value in
+                        ring.scaleEffect(value.scale).opacity(value.opacity)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.scale) {
+                            LinearKeyframe(1, duration: 0.12)
+                            CubicKeyframe(2.1, duration: 0.75)
+                        }
+                        KeyframeTrack(\.opacity) {
+                            LinearKeyframe(saved ? 0.9 : 0, duration: 0.12)
+                            CubicKeyframe(0, duration: 0.75)
+                        }
+                    }
+            }
+            Circle()
+                .fill(saved ? LanguageCircle.orange : palette.ink.opacity(0.08))
+                .frame(width: 34, height: 34)
+            if saving {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(palette.ink.opacity(0.7))
+                    .transition(.opacity)
+            } else {
+                Image(systemName: saved ? "checkmark" : "photo.on.rectangle")
+                    .scaledFont(size: saved ? 15 : 13, weight: .bold, relativeTo: .body)
+                    .foregroundStyle(saved ? Color.white : palette.ink.opacity(0.7))
+                    .contentTransition(.symbolEffect(.replace))
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
+        }
+        .frame(width: 34, height: 34)
+        .keyframeAnimator(initialValue: 1.0, trigger: saved) { content, scale in
+            content.scaleEffect(scale)
+        } keyframes: { _ in
+            SpringKeyframe(saved && !reduceMotion ? 1.22 : 1, duration: 0.2, spring: .snappy)
+            SpringKeyframe(1, duration: 0.45, spring: .bouncy)
+        }
+    }
+
+    private struct Ring {
+        var scale: CGFloat = 1
+        var opacity: Double = 0
+    }
+}
+#endif
 
 /// The cards' capsule button: filled with ink when it is the main way on.
 struct CardButton: View {
@@ -1677,7 +1782,8 @@ struct CardButtonLabel: View {
 // MARK: - Caption style
 
 /// How the burnt-in captions look: words at a time, size, face, shadow and outline;
-/// where they sit is set by dragging them on the film. Every choice shows at once in
+/// where they sit is set by dragging them on the film (held to the middle across and
+/// down, so the usual place is easy to find again). Every choice shows at once in
 /// the preview. The rows are wells whose lifted knob travels to the choice, as in the
 /// settings bar.
 struct CaptionStyleControls: View {
@@ -1713,26 +1819,6 @@ struct CaptionStyleControls: View {
                 toggle(localized("Ombra"), isOn: model.style.shadow) { model.setCaptionShadow(!model.style.shadow) }
                 toggle(localized("Contorn"), isOn: model.style.stroke) { model.setCaptionStroke(!model.style.stroke) }
                 Spacer(minLength: 0)
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { model.placeCaption(at: nil, finished: true) }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.down.to.line")
-                            .scaledFont(size: 11, weight: .bold, relativeTo: .footnote)
-                        Text(localized("Al lloc"))
-                            .scaledFont(size: 13, weight: .semibold, relativeTo: .footnote)
-                            .fixedSize()
-                    }
-                    .foregroundStyle(palette.ink.opacity(model.style.position == nil ? 0.3 : 0.75))
-                    .padding(.horizontal, 12)
-                    .frame(height: 34)
-                    .background(Capsule(style: .continuous).fill(palette.well))
-                    .contentShape(Capsule(style: .continuous))
-                }
-                .buttonStyle(PressableButtonStyle())
-                .disabled(model.style.position == nil)
-                .animation(.easeInOut(duration: 0.2), value: model.style.position == nil)
-                .accessibilityLabel(localized("Torna el subtítol al seu lloc"))
             }
             Text(localized("Arrossega el subtítol sobre el vídeo per moure'l."))
                 .scaledFont(size: 12, relativeTo: .footnote)
@@ -2099,13 +2185,13 @@ struct EditorExportPanel: View {
                         HStack(spacing: 6) {
                             Image(systemName: video ? "film" : "captions.bubble")
                                 .scaledFont(size: 12, weight: .semibold, relativeTo: .footnote)
-                            Text(video ? localized("Vídeo") : localized("Subtítols i text"))
+                            Text(video ? localized("Vídeo") : localized("Arxiu .srt"))
                                 .scaledFont(size: 13, weight: .semibold, relativeTo: .footnote)
                                 .lineLimit(1)
                                 .fixedSize()
                         }
                     },
-                    accessibilityName: { $0 ? localized("Vídeo amb subtítols") : localized("Subtítols i text") },
+                    accessibilityName: { $0 ? localized("Vídeo amb subtítols") : localized("Arxiu .srt") },
                     choose: { exportsVideo = $0 }
                 )
             }

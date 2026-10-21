@@ -8,7 +8,7 @@ import Foundation
 /// snapshot, which only settled words do; everything still in the snapshot is taken
 /// from the newest one, so revisions and the final correction replace it.
 public struct SessionTranscript: Equatable, Sendable {
-    public struct Word: Equatable, Sendable {
+    public struct Word: Codable, Equatable, Sendable {
         public let text: String
         /// Seconds from the start of the session; `nil` for a word heard without timings.
         public let start: TimeInterval?
@@ -133,6 +133,17 @@ public enum TranscriptExport {
         return "duna \(stamp).\(format.fileExtension)"
     }
 
+    /// The reader's title as a file name, without the characters a file system or
+    /// AirDrop objects to; the date's name when there is none.
+    public static func filename(title: String, fallback session: SessionTranscript, format: TranscriptExportFormat) -> String {
+        let forbidden = CharacterSet(charactersIn: "/\\:?%*|\"<>").union(.newlines).union(.controlCharacters)
+        let cleaned = title.unicodeScalars.map { forbidden.contains($0) ? " " : String($0) }.joined()
+            .split(separator: " ").joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        guard !cleaned.isEmpty else { return filename(for: session, format: format) }
+        return "\(cleaned.prefix(80)).\(format.fileExtension)"
+    }
+
     /// "Transcripció · 27 de setembre de 2026, 10:42", in the interface language. The
     /// first line of a note in Notes becomes its title.
     public static func title(for session: SessionTranscript) -> String {
@@ -179,8 +190,13 @@ public enum TranscriptExport {
         title(for: session) + "\n\n" + plainText(session)
     }
 
-    public static func markdown(_ session: SessionTranscript) -> String {
-        var lines = ["# \(title(for: session))", ""]
+    /// `title` and `description` are a kept transcription's own (`SavedTranscript`).
+    public static func markdown(_ session: SessionTranscript, title chosen: String? = nil, description: String? = nil) -> String {
+        var lines = ["# \(escapedMarkdown(chosen ?? title(for: session)))", ""]
+        if let description = description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
+            lines.append(escapedMarkdown(description))
+            lines.append("")
+        }
         lines.append("*duna · \(durationLabel(session.duration)) · \(localized("\(session.wordCount) paraules"))*")
         for paragraph in paragraphs(session) {
             lines.append("")

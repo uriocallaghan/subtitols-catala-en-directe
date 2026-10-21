@@ -45,6 +45,8 @@ struct AboutView: View {
                            localized("NeMo-Speech.cpp de NVIDIA i ggml. Llicència Apache 2.0 i MIT."))
                     credit(localized("Tipografies"),
                            localized("Inter (Rasmus Andersson) i Atkinson Hyperlegible Next i Mono (Braille Institute of America). SIL Open Font License 1.1."))
+                    credit(localized("Llicències"),
+                           localized("Els models s'han convertit i comprimit per funcionar a l'aparell. Les llicències completes s'enllacen a les condicions d'ús."))
                 } header: {
                     Text(localized("Crèdits i llicències"))
                 }

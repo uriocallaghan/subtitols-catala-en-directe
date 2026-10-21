@@ -28,8 +28,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     TARGETED_DEVICE_FAMILY: "1"
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "7"
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "8"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     DEAD_CODE_STRIPPING: YES
     SWIFT_INCLUDE_PATHS: $(SRCROOT)/Modules/CNemoSpeech
@@ -259,6 +259,7 @@ targets:
           - SubtitleEditorModel.swift
           - SubtitleEditorView.swift
           - SharedInbox.swift
+          - TranscriptLibrary.swift
           - LanguageFigure.swift
           - GreetingLettering.swift
           - GreetingLettering+Paths.swift
@@ -279,6 +280,15 @@ targets:
         group: Resources
         buildPhase: resources
       - path: ../Resources/Fonts/AtkinsonHyperlegibleMono-Medium.ttf
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/OFL-Inter.txt
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/OFL-AtkinsonHyperlegibleNext.txt
+        group: Resources
+        buildPhase: resources
+      - path: ../Resources/Fonts/OFL-AtkinsonHyperlegibleMono.txt
         group: Resources
         buildPhase: resources
       - path: ../../.work/ios-stage/veus-segmentacio
@@ -341,6 +351,9 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: duna escolta la veu per convertir-la en text al mateix iPhone. L'àudio no surt mai del telèfon.
         NSPhotoLibraryAddUsageDescription: duna desa a Fotos els vídeos amb subtítols que facis.
+        # Never shown: the app asks only for add-only access. Present because the binary
+        # references PHPhotoLibrary, which the upload scan matches by name (ITMS-90683).
+        NSPhotoLibraryUsageDescription: duna només afegeix a Fotos els vídeos amb subtítols que facis. No llegeix mai la teva fototeca; els vídeos que tries arriben pel selector del sistema.
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIApplicationSupportsIndirectInputEvents: true

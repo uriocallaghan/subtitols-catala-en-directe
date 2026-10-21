@@ -43,6 +43,8 @@ struct SettingsBar: View {
     /// The theme's animated position, 0 light to 1 dark, so the bar crosses over in
     /// step with the reading pane.
     var themeDarkness: Double
+    /// After a stop, the bar's choices for the session on screen; nil the rest of the time.
+    var sessionActions: SessionActions?
 
     static let motion = Animation.spring(response: 0.3, dampingFraction: 0.84)
     static let selection = Animation.spring(response: 0.24, dampingFraction: 0.82)
@@ -57,6 +59,11 @@ struct SettingsBar: View {
     @State private var infoIsShown = false
     @State private var infoReveal: Task<Void, Never>?
     @StateObject private var inputs = AudioInputDeviceList()
+    /// Descarta asks first, from the button itself.
+    @State private var confirmsDiscard = false
+
+    /// The stopped session's choices are showing in place of the settings.
+    private var showsActions: Bool { sessionActions != nil }
     /// The settings panel is open, alone or with its language or microphone card above
     /// the bar (`.language` and `.input` open inside the settings).
     private func isOpen(_ item: SettingsBarItem) -> Bool {
@@ -74,11 +81,21 @@ struct SettingsBar: View {
     private var palette: SettingsBarPalette { .blended(darkness: themeDarkness) }
 
     var body: some View {
-        HStack(spacing: 5) {
+        // The settings and the stopped session's choices share one row: each set grows
+        // out of nothing where the other shrinks away, while the record well becomes Desa.
+        HStack(spacing: 0) {
             profileWell
+                .modifier(BarCollapse(isGone: showsActions))
             toolWell(.size) { sizePanel }
+                .modifier(BarCollapse(isGone: showsActions))
             toolWell(.typeface) { typefacePanel }
+                .modifier(BarCollapse(isGone: showsActions))
             toolWell(.display) { displayPanel }
+                .modifier(BarCollapse(isGone: showsActions))
+            actionWell(.discard)
+                .modifier(BarCollapse(isGone: !showsActions))
+            actionWell(.export)
+                .modifier(BarCollapse(isGone: !showsActions))
             recordWell
         }
         .padding(5)
@@ -127,7 +144,9 @@ struct SettingsBar: View {
                         .offset(y: -proxy.size.height - Self.infoGap)
                 }
                 if expanded == .vocabulary {
-                    VocabularyPanel(controller: controller, palette: palette)
+                    VocabularyPanel(controller: controller, palette: palette) {
+                        withAnimation(Self.motion) { expanded = nil }
+                    }
                         .transition(
                             reduceMotion
                                 ? .opacity
@@ -277,24 +296,104 @@ struct SettingsBar: View {
         .background(Capsule(style: .continuous).fill(palette.well))
     }
 
+    /// Record, or, after a stop, Desa: the well stretches to its word and fills with ink,
+    /// the bar's one primary action, where the pointer already is.
     private var recordWell: some View {
-        Button {
+        let isSave = showsActions
+        return Button {
+            if let sessionActions {
+                sessionActions.save()
+                return
+            }
             withAnimation(Self.motion) { expanded = nil }
             controller.toggleRecording()
         } label: {
-            RecordGlyph(
-                isRecording: controller.isRecording,
-                isBusy: !controller.canToggle && controller.state != .needsLanguage,
-                palette: palette
-            )
-            .frame(width: Self.knobSize, height: Self.knobSize)
-            .contentShape(Circle())
+            ZStack {
+                RecordGlyph(
+                    isRecording: controller.isRecording,
+                    isBusy: !controller.canToggle && controller.state != .needsLanguage,
+                    palette: palette
+                )
+                .frame(width: Self.knobSize, height: Self.knobSize)
+                .opacity(isSave ? 0 : 1)
+                .scaleEffect(isSave && !reduceMotion ? 0.6 : 1)
+                if isSave {
+                    actionLabel(.save, ink: palette.surface)
+                        .modifier(StaggeredEntrance(index: 2))
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .opacity.animation(.easeOut(duration: 0.1))
+                        ))
+                }
+            }
+            .frame(width: isSave ? nil : Self.knobSize, height: Self.knobSize)
+            .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(PressableButtonStyle())
-        .disabled(!controller.canToggle)
+        .disabled(!isSave && !controller.canToggle)
         .padding(Self.wellPadding)
-        .background(Circle().fill(palette.well))
-        .accessibilityLabel(controller.canToggle ? controller.buttonTitle : controller.detail)
+        .background(Capsule(style: .continuous).fill(isSave ? palette.ink : palette.well))
+        .accessibilityLabel(isSave
+            ? SessionAction.save.accessibilityLabel
+            : (controller.canToggle ? controller.buttonTitle : controller.detail))
+    }
+
+    // MARK: - After a stop
+
+    /// Descarta (which asks first, from a card under the pointer) or Exporta.
+    private func actionWell(_ action: SessionAction) -> some View {
+        Button {
+            switch action {
+            case .discard:
+                sessionActions?.consideringDiscard(true)
+                confirmsDiscard = true
+            case .export: sessionActions?.export()
+            case .save: sessionActions?.save()
+            }
+        } label: {
+            actionLabel(action, ink: palette.ink.opacity(0.82))
+                .frame(height: Self.knobSize)
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PressableButtonStyle())
+        .padding(Self.wellPadding)
+        .background(Capsule(style: .continuous).fill(palette.well))
+        .accessibilityLabel(action.accessibilityLabel)
+        .popover(isPresented: action == .discard ? $confirmsDiscard : .constant(false), arrowEdge: .top) {
+            DiscardCard {
+                confirmsDiscard = false
+                sessionActions?.discard()
+            } onCancel: {
+                confirmsDiscard = false
+            }
+        }
+        .onChange(of: confirmsDiscard) { _, shown in
+            if action == .discard, !shown { sessionActions?.consideringDiscard(false) }
+            #if DEBUG
+            // Test runs: `-autoDiscard YES` answers the question after a moment.
+            if action == .discard, shown, UserDefaults.standard.bool(forKey: "autoDiscard") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    confirmsDiscard = false
+                    sessionActions?.discard()
+                }
+            }
+            #endif
+        }
+    }
+
+    /// A glyph and a word, kept at their own size whatever the well does.
+    private func actionLabel(_ action: SessionAction, ink: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: action.symbol)
+                .font(.system(size: 10, weight: .semibold))
+            Text(action.title)
+                .font(.system(size: 11.5, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(ink)
+        .fixedSize()
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Item button
@@ -819,6 +918,7 @@ private struct InputPanel: View {
 private struct VocabularyPanel: View {
     @ObservedObject var controller: SubtitleController
     let palette: SettingsBarPalette
+    let close: () -> Void
     private static let width: CGFloat = 320
 
     var body: some View {
@@ -850,7 +950,8 @@ private struct VocabularyPanel: View {
                 pillSize: 12,
                 fieldSize: 12,
                 onAdd: { controller.addVocabularyTerm($0) },
-                onRemove: { controller.removeVocabularyTerm($0) }
+                onRemove: { controller.removeVocabularyTerm($0) },
+                onCancel: close
             )
             .padding(.horizontal, 4)
             .padding(.bottom, 4)
@@ -1117,7 +1218,65 @@ private struct InfoBarRise: ViewModifier {
     }
 }
 
-private struct StaggeredEntrance: ViewModifier {
+/// "Vols descartar…?", in a card that rises from the Descarta well.
+private struct DiscardCard: View {
+    let onDiscard: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(localized("Vols descartar aquesta transcripció?"))
+                .font(.system(size: 13, weight: .semibold))
+            Text(localized("No es desarà a Transcripcions i no es podrà recuperar."))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(localized("Cancel·la"), action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button(localized("Descarta"), role: .destructive, action: onDiscard)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .controlSize(.regular)
+            .padding(.top, 8)
+        }
+        .padding(16)
+        .frame(width: 290)
+    }
+}
+
+/// A well of the bar that shrinks to nothing where it stands (or grows back): its width
+/// follows the bar's spring, its fade is quicker, so a closing well has gone before it
+/// is a sliver and an opening one shows once it has room.
+private struct BarCollapse: ViewModifier {
+    let isGone: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .fixedSize()
+            .frame(width: isGone ? 0 : nil, alignment: .leading)
+            .clipShape(Rectangle().inset(by: isGone ? 0 : -16))
+            .animation(fade) { well in
+                well
+                    .opacity(isGone ? 0 : 1)
+                    .scaleEffect(isGone && !reduceMotion ? 0.7 : 1)
+                    .blur(radius: isGone && !reduceMotion ? 2 : 0)
+            }
+            .padding(.trailing, isGone ? 0 : 5)
+            .allowsHitTesting(!isGone)
+            .accessibilityHidden(isGone)
+    }
+
+    private var fade: Animation {
+        if reduceMotion { return .easeInOut(duration: 0.2) }
+        return isGone ? .easeOut(duration: 0.1) : .easeOut(duration: 0.22).delay(0.08)
+    }
+}
+
+struct StaggeredEntrance: ViewModifier {
     let index: Int
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1141,22 +1300,26 @@ private struct StaggeredEntrance: ViewModifier {
 
 /// A notched track with one stop per size step. Dragging snaps stop to stop with a
 /// haptic tick, so the size is chosen by feel as much as by eye.
-private struct SizeTrack: View {
+struct SizeTrack: View {
     @Binding var value: Double
     let palette: SettingsBarPalette
+    /// The reading pane's sizes unless told otherwise (a kept transcription's are smaller).
+    var range: ClosedRange<CGFloat> = AppVisualMetrics.minimumFontSize...AppVisualMetrics.maximumFontSize
+    var step: CGFloat = AppVisualMetrics.fontSizeStep
 
     @GestureState private var isDragging = false
 
     private let width: CGFloat = 124
     private let knob: CGFloat = 14
-    private var lower: CGFloat { AppVisualMetrics.minimumFontSize }
-    private var upper: CGFloat { AppVisualMetrics.maximumFontSize }
-    private var step: CGFloat { AppVisualMetrics.fontSizeStep }
+    private var lower: CGFloat { range.lowerBound }
+    private var upper: CGFloat { range.upperBound }
     private var stops: Int { Int(((upper - lower) / step).rounded()) + 1 }
     private var usable: CGFloat { width - knob }
 
+    private func clamped(_ size: CGFloat) -> CGFloat { min(upper, max(lower, size)) }
+
     private var fraction: CGFloat {
-        (AppVisualMetrics.clampedFontSize(CGFloat(value)) - lower) / (upper - lower)
+        (clamped(CGFloat(value)) - lower) / (upper - lower)
     }
 
     var body: some View {
@@ -1212,7 +1375,7 @@ private struct SizeTrack: View {
         .accessibilityValue(localized("\(Int(value)) punts"))
         .accessibilityAdjustableAction { direction in
             let delta: CGFloat = direction == .increment ? step : -step
-            value = Double(AppVisualMetrics.clampedFontSize(CGFloat(value) + delta))
+            value = Double(clamped(CGFloat(value) + delta))
         }
     }
 }

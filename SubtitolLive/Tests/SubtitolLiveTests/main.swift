@@ -2804,6 +2804,80 @@ private func testBurnedCaptions() {
     }
 }
 
+private func testSavedTranscripts() {
+    func word(_ text: String, _ start: Double, paragraph: Bool = false) -> SessionTranscript.Word {
+        SessionTranscript.Word(text: text, start: start, end: start + 0.4, startsParagraph: paragraph)
+    }
+    let heard = [
+        word("Bon", 0), word("dia", 0.5), word("a", 1), word("tothom.", 1.5),
+        word("Avui", 3, paragraph: true), word("parlarem", 3.5), word("de", 4), word("la", 4.5), word("pluja.", 5),
+    ]
+    let session = SessionTranscript(words: heard, duration: 6, startedAt: Date(timeIntervalSince1970: 1_000))
+    var saved = SavedTranscript(session: session, languageID: "ca", savedAt: Date(timeIntervalSince1970: 2_000))
+    check(saved.text, equals: "Bon dia a tothom.\n\nAvui parlarem de la pluja.", "kept text has the session's paragraphs")
+    check(saved.createdAt, equals: Date(timeIntervalSince1970: 1_000), "kept transcription dated from its start")
+    check(saved.session.words.compactMap(\.start), equals: heard.compactMap(\.start), "untouched text keeps every time")
+    check(TranscriptExport.plainText(saved.session), equals: TranscriptExport.plainText(session), "untouched text exports as heard")
+
+    // A correction keeps the times of the words around it and shares the replaced one's.
+    saved.text = "Bon dia a tothom.\n\nAvui parlarem de la calor i la pluja."
+    let corrected = saved.session.words
+    check(corrected.map(\.text).joined(separator: " "), equals: "Bon dia a tothom. Avui parlarem de la calor i la pluja.", "corrected words")
+    check(corrected[4].start, equals: 3, "word before a correction keeps its time")
+    check(corrected[4].startsParagraph, "paragraph kept across a correction")
+    check(corrected.last?.start, equals: 5, "word after a correction keeps its time")
+    let times = corrected.compactMap(\.start)
+    check(times.count == corrected.count && zip(times, times.dropFirst()).allSatisfy { $0 <= $1 }, "corrected words stay in order, all timed")
+    check(TranscriptExport.subRip(saved.session).components(separatedBy: " --> ").count - 1, equals: 12, "srt follows the corrected text")
+
+    // Untimed sessions stay untimed rather than inventing times.
+    let untimed = SavedTranscript(session: SessionTranscript(words: [SessionTranscript.Word(text: "hola", start: nil, end: nil)], duration: 0, startedAt: nil), languageID: nil)
+    check(untimed.session.words.first?.start == nil, "untimed word stays untimed")
+
+    // Listings: a title from the first sentence, the rest under it.
+    let listing = SavedTranscript(session: session, languageID: "ca").listing
+    check(listing.automaticTitle, equals: "Bon dia a tothom", "automatic title is the first short sentence")
+    check(listing.detailLine, equals: "Avui parlarem de la pluja.", "detail line is what follows")
+    check(listing.wordCount, equals: 9, "listing counts words")
+    let long = SavedTranscriptListing(id: UUID(), title: "", summary: "", createdAt: Date(), modifiedAt: Date(), languageID: nil, duration: 0, text: "U dos tres quatre cinc sis set vuit nou deu.")
+    check(long.automaticTitle, equals: "U dos tres quatre cinc sis set…", "a long first sentence is cut")
+    var titled = listing
+    titled.title = "  Classe  "
+    titled.summary = "Meteorologia"
+    check(titled.displayTitle, equals: "Classe", "reader's title, trimmed")
+    check(titled.detailLine, equals: "Meteorologia", "reader's description under it")
+    check(titled.matches("METEOROLOGIA") && titled.matches("plúja") && !titled.matches("neu"), "search ignores case and accents")
+
+    // Exports carry the reader's title and description.
+    var named = SavedTranscript(session: session, languageID: "ca")
+    named.title = "Classe: 1/2"
+    named.summary = "Primer dia"
+    check(named.render(.markdown).hasPrefix("# Classe: 1/2\n\nPrimer dia\n\n*duna · "), "markdown with title and description")
+    check(named.note.hasPrefix("Classe: 1/2\nPrimer dia\n\nBon dia"), "note with title and description")
+    check(named.filename(for: .text), equals: "Classe 1 2.txt", "file named after the title, safely")
+    check(SavedTranscript(session: session, languageID: nil).filename(for: .subtitles).hasPrefix("duna "), "untitled file named by date")
+
+    // The store: files plus an index, rebuilt when it is missing.
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("saved-transcripts-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = TranscriptStore(root: root)
+    let older = SavedTranscript(session: SessionTranscript(words: heard, duration: 6, startedAt: Date(timeIntervalSince1970: 10)), languageID: "ca")
+    let newer = SavedTranscript(session: SessionTranscript(words: heard, duration: 6, startedAt: Date(timeIntervalSince1970: 20)), languageID: "es")
+    do {
+        try store.save(older, index: [older.listing])
+        try store.save(newer, index: [older.listing, newer.listing])
+    } catch {
+        check(false, "store save threw \(error)")
+    }
+    check(store.listings().map(\.id), equals: [newer.id, older.id], "listings newest first")
+    check(store.load(newer.id), equals: newer, "transcription round-trips")
+    try? FileManager.default.removeItem(at: root.appendingPathComponent("index.json"))
+    check(store.listings().map(\.id), equals: [newer.id, older.id], "index rebuilt from the files")
+    store.remove(older.id, index: [newer.listing])
+    check(store.listings().map(\.id), equals: [newer.id], "removed transcription leaves the list")
+    check(store.load(older.id) == nil, "removed transcription's file is gone")
+}
+
 private func testSessionTranscriptKeepsWholeSession() {
     func word(_ id: UInt64, _ text: String, _ start: UInt64, committed: Bool = true, paragraph: Bool = false) -> StableTranscriptWord {
         StableTranscriptWord(
@@ -3121,6 +3195,7 @@ testReadableTranscriptPreservesRepeatedBoundaryWords()
 testEmptyFinalDropsOnlyStaleProvisionalText()
 testReadableTranscriptBoundsLongSessionSnapshots()
 testSessionTranscriptKeepsWholeSession()
+testSavedTranscripts()
 testSubtitleDocument()
 testBurnedCaptions()
 testShaderMotionDynamics()

@@ -102,12 +102,16 @@ struct PhoneReaderView: View {
     @EnvironmentObject private var packs: LanguagePackStore
     @EnvironmentObject private var imports: ImportCenter
     @ObservedObject private var shortcuts = ShortcutHost.shared
+    @ObservedObject private var library = TranscriptLibrary.shared
 
     @AppStorage("phone.fontSize") private var fontSize = Double(PhoneMetrics.defaultFontSize)
     @AppStorage("phone.theme") private var theme: PhoneTheme = .automatic
     @AppStorage("phone.ageGradient") private var prefersAgeGradient = true
     @AppStorage("phone.showsOrb") private var showsOrb = true
     @AppStorage("reading.typeface") private var typeface: ReadingTypeface = .default
+    /// The two top glyphs on Liquid Glass (trial of 2026-10-20; `-phone.glassGlyphs NO`
+    /// shows them bare, as before).
+    @AppStorage("phone.glassGlyphs") private var glassGlyphs = true
 
     @Environment(\.colorScheme) private var systemScheme
     @Environment(\.colorSchemeContrast) private var contrast
@@ -129,6 +133,21 @@ struct PhoneReaderView: View {
     @State private var photo: PhotosPickerItem?
     /// The orb follows the voices of the video being transcribed, when there is one.
     @State private var orbSource = OrbLevelSource()
+    /// The session on screen, kept in the folder the moment listening stopped. While it
+    /// is set the bar offers Descarta, Exporta and Desa.
+    @State private var keptID: UUID?
+    /// A new reading pane each time the text on screen is put away, so the old one can
+    /// leave by its own way (`departure`) while the prompt fades in.
+    @State private var paneGeneration = 0
+    @State private var departure: PaneDeparture = .fade
+    /// The words put away, held on screen while they leave (the controller has already
+    /// let them go, and may be listening again).
+    @State private var leavingWords: LeavingWords?
+    /// How far the words have gone on their way out (`PaneLeaving`).
+    @State private var leaveProgress: CGFloat = 0
+    /// Transcriptions that have landed in the folder, for its bounce.
+    @State private var arrivals = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     private static let themeMotion = Animation.easeInOut(duration: 0.35)
     private static let orbMotion = Animation.spring(response: 0.55, dampingFraction: 0.9)
@@ -145,9 +164,11 @@ struct PhoneReaderView: View {
     private var showsAgeGradient: Bool { prefersAgeGradient && contrast != .increased }
 
     var body: some View {
-        ThemeBlend(darkness: themeDarkness ?? (isDark ? 1 : 0)) { darkness in
-            screen(darkness: darkness)
-        }
+        sessionHandling(
+            ThemeBlend(darkness: themeDarkness ?? (isDark ? 1 : 0)) { darkness in
+                screen(darkness: darkness)
+            }
+        )
         .onChange(of: isDark, initial: true) { _, dark in
             let target: Double = dark ? 1 : 0
             guard themeDarkness != nil else {
@@ -164,6 +185,11 @@ struct PhoneReaderView: View {
             if let wanted = UserDefaults.standard.string(forKey: "autoInstall"), controller.rules.id != wanted { return }
             while !controller.canToggle { try? await Task.sleep(for: .milliseconds(200)) }
             controller.toggleRecording()
+            // `-autoStop S` stops after S seconds of listening, to show what follows a stop.
+            let stopAfter = UserDefaults.standard.double(forKey: "autoStop")
+            guard stopAfter > 0 else { return }
+            try? await Task.sleep(for: .seconds(stopAfter))
+            if controller.isRecording { controller.toggleRecording() }
         }
         .task {
             // Screenshot runs: `-openPanel display`, `-autoRecord YES`.
@@ -284,8 +310,38 @@ struct PhoneReaderView: View {
                 exportSheet
             case .importVideo:
                 importSheet
+            case .library:
+                TranscriptLibraryView(library: library, isDark: isDark)
+                    .presentationDetents([.large])
+                    .presentationCornerRadius(28)
+                    .presentationBackground(ReadingTheme.resolved(isDark: isDark).paper)
+                    .preferredColorScheme(theme == .automatic ? nil : (theme == .dark ? .dark : .light))
             }
         }
+    }
+
+    /// What follows a stop: keeping the session, the question before discarding it, and
+    /// writing the folder's last edits when the app leaves the screen.
+    private func sessionHandling(_ content: some View) -> some View {
+        content
+            .onChange(of: controller.state) { old, new in
+                sessionStateChanged(from: old, to: new)
+            }
+            // A new language is a new controller, with nothing on screen.
+            .onChange(of: ObjectIdentifier(controller)) { _, _ in
+                keptID = nil
+                departure = .fade
+            }
+            // The session on screen, deleted from the folder, has nothing left to keep.
+            .onChange(of: library.listings.map(\.id)) { _, ids in
+                guard let keptID, !ids.contains(keptID) else { return }
+                withAnimation(PhoneSettingsBar.motion) { self.keptID = nil }
+                departure = .fade
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { library.flush() }
+            }
+            .sensoryFeedback(.success, trigger: arrivals)
     }
 
     private func screen(darkness: Double) -> some View {
@@ -298,7 +354,7 @@ struct PhoneReaderView: View {
 
                 VStack(spacing: 0) {
                     orbBand(height: orbHeight, theme: readingTheme)
-                    readingPane(theme: readingTheme)
+                    readingPane(theme: readingTheme, lift: orbHeight + PhoneMetrics.readingTop(orbHeight: orbHeight))
                     .padding(.top, PhoneMetrics.readingTop(orbHeight: orbHeight))
                     .padding(.horizontal, PhoneMetrics.readingSidePadding)
                     .padding(.bottom, barClearance)
@@ -326,26 +382,35 @@ struct PhoneReaderView: View {
                     onLanguages: { open(.languages) },
                     onMicrophone: { open(.microphone) },
                     onVocabulary: { open(.vocabulary) },
-                    onAbout: { open(.about) }
+                    onAbout: { open(.about) },
+                    sessionActions: showsSessionActions
+                        ? SessionActions(
+                            consideringDiscard: { considering in
+                                // The text leaves by the way it will take, set before it goes.
+                                departure = considering ? .discard : .save
+                            },
+                            discard: discardKept,
+                            export: { open(.export) },
+                            save: { putAway(.save) }
+                        )
+                        : nil
                 )
                 .padding(.bottom, PhoneMetrics.barBottomGap)
             }
             // Top left, clear of the orb: the gallery glyph that makes a video's subtitles.
             .overlay(alignment: .topLeading) {
                 importGlyph(ink: readingTheme.ink)
+                    .modifier(GlassGlyph(isOn: glassGlyphs))
                     .padding(.leading, 18)
                     .padding(.top, 12)
             }
-            // Top right: the share glyph once there is text to share.
+            // Top right: the folder of kept transcriptions, where Desa sends the text.
             .overlay(alignment: .topTrailing) {
-                if !exportedSession.isEmpty {
-                    ExportButton(ink: readingTheme.ink, size: 18) { open(.export) }
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.7)))
-                        .padding(.trailing, 18)
-                        .padding(.top, 12)
-                }
+                LibraryButton(ink: readingTheme.ink, size: 18, arrivals: arrivals, restingOpacity: glyphOpacity) { open(.library) }
+                    .modifier(GlassGlyph(isOn: glassGlyphs))
+                    .padding(.trailing, 18)
+                    .padding(.top, 12)
             }
-            .animation(Self.orbMotion, value: exportedSession.isEmpty)
         }
     }
 
@@ -445,8 +510,81 @@ struct PhoneReaderView: View {
             }
             return
         }
+        // A tap with a stopped session on screen starts the next one: the last one goes
+        // to the folder, where it was already kept.
+        if keptID != nil, controller.state == .ready {
+            putAway(.save, thenListen: true)
+            return
+        }
         guard controller.canToggle else { return }
         controller.toggleRecording()
+    }
+
+    // MARK: - After a stop
+
+    /// The bar's Descarta · Exporta · Desa, while a stopped session is on screen.
+    private var showsSessionActions: Bool {
+        keptID != nil && controller.state == .ready && imports.current == nil
+    }
+
+    /// A session that stops with words is kept at once, so nothing is lost whatever the
+    /// reader taps next; the bar then offers what to do with it.
+    private func sessionStateChanged(from old: SubtitleController.State, to new: SubtitleController.State) {
+        if new == .requestingPermission || new == .recording, keptID != nil {
+            withAnimation(PhoneSettingsBar.motion) { keptID = nil }
+            departure = .fade
+        }
+        guard old == .transcribing, new != .transcribing, imports.current == nil,
+              !controller.session.isEmpty else { return }
+        let id = library.keep(controller.session, languageID: controller.rules.id)
+        guard new == .ready else { return }
+        close()
+        departure = .save
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.25) : PhoneSettingsBar.motion) { keptID = id }
+    }
+
+    /// The text on screen leaves (for the folder, or dissolving when discarded), the
+    /// prompt fades in where it was, and the bar gives its settings back.
+    private func putAway(_ kind: PaneDeparture, thenListen: Bool = false) {
+        guard keptID != nil else { return }
+        departure = kind
+        // The pane keeps showing the words while it leaves; once they have gone, a new
+        // pane fades in with the prompt (or with the next session, already listening).
+        leavingWords = LeavingWords(
+            committedWords: controller.committedWords,
+            provisionalWords: controller.provisionalWords
+        )
+        controller.clearTranscript()
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.22) : PhoneSettingsBar.motion) { keptID = nil }
+        let paneMotion: Animation = reduceMotion
+            ? .easeInOut(duration: 0.3)
+            : (kind == .discard ? .easeIn(duration: 0.36) : .spring(response: 0.6, dampingFraction: 0.94))
+        withAnimation(paneMotion) {
+            leaveProgress = 1
+        } completion: {
+            var quiet = Transaction()
+            quiet.disablesAnimations = true
+            withTransaction(quiet) {
+                leavingWords = nil
+                leaveProgress = 0
+                paneGeneration += 1
+                if keptID == nil { departure = .fade }
+            }
+        }
+        if kind == .save {
+            // The folder answers as the text reaches it.
+            Task {
+                try? await Task.sleep(for: .milliseconds(reduceMotion ? 120 : 360))
+                arrivals += 1
+            }
+        }
+        if thenListen { controller.toggleRecording() }
+    }
+
+    private func discardKept() {
+        guard let keptID else { return }
+        putAway(.discard)
+        library.remove(keptID)
     }
 
     // MARK: - Video import
@@ -459,7 +597,7 @@ struct PhoneReaderView: View {
 
 
     @ViewBuilder
-    private func readingPane(theme: ReadingTheme) -> some View {
+    private func readingPane(theme: ReadingTheme, lift: CGFloat) -> some View {
         let size = PhoneMetrics.readingSize(CGFloat(fontSize), typeSize: typeSize)
         ZStack {
             if let job = imports.current, job.phase != .choosing {
@@ -482,18 +620,21 @@ struct PhoneReaderView: View {
                 .transition(.opacity)
             } else {
                 FixedFocusTranscriptView(
-                    committedWords: controller.committedWords,
-                    provisionalWords: controller.provisionalWords,
-                    fallbackText: fallbackText,
+                    committedWords: leavingWords?.committedWords ?? controller.committedWords,
+                    provisionalWords: leavingWords?.provisionalWords ?? controller.provisionalWords,
+                    fallbackText: leavingWords == nil ? fallbackText : "",
                     fontSize: size,
                     typeface: typeface,
                     theme: theme,
-                    isLive: controller.isRecording,
+                    isLive: leavingWords == nil && controller.isRecording,
                     ageGradient: showsAgeGradient,
                     fade: .phone,
                     scrollsBack: true,
                     speechLanguage: controller.rules.id
                 )
+                .modifier(PaneLeaving(departure: reduceMotion ? .fade : departure, towards: CGSize(width: -26, height: -lift), progress: leaveProgress))
+                .modifier(ArrivingPane(delay: paneGeneration == 0 ? nil : 0.04))
+                .id(paneGeneration)
                 .transition(.opacity)
             }
         }
@@ -519,7 +660,8 @@ struct PhoneReaderView: View {
                     ink: ink,
                     size: 18,
                     progress: job.isWorking ? (job.phase == .preparing ? 0 : job.displayedFraction(at: context.date)) : nil,
-                    isFinished: job.phase == .finished
+                    isFinished: job.phase == .finished,
+                    restingOpacity: glyphOpacity
                 ) { open(.importVideo) }
             }
         } else {
@@ -531,13 +673,16 @@ struct PhoneReaderView: View {
                     Label(localized("Fitxers"), systemImage: "folder")
                 }
             } label: {
-                ImportGlyphLabel(ink: ink, size: 18)
+                ImportGlyphLabel(ink: ink, size: 18, restingOpacity: glyphOpacity)
             }
             .disabled(controller.isRecording || controller.state == .transcribing)
             .accessibilityLabel(localized("Subtítols d'un vídeo"))
             .accessibilityHint(localized("Tria un vídeo i en fa els subtítols en aquest dispositiu"))
         }
     }
+
+    /// On glass the glyphs take the system's own strength; bare, they stay a quiet grey.
+    private var glyphOpacity: Double { glassGlyphs ? 0.8 : 0.34 }
 
     /// Photos hands over a copy, which the job removes when it is done with it.
     private func importFromPhotos(_ item: PhotosPickerItem) async {
@@ -655,8 +800,23 @@ enum PhoneSheet: String, Identifiable {
     case about
     case export
     case importVideo
+    case library
 
     var id: String { rawValue }
+}
+
+/// A top glyph on a disc of Liquid Glass that answers the finger, as the system's own
+/// bar buttons do.
+private struct GlassGlyph: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            content
+        }
+    }
 }
 
 /// A film from the photo library, copied where the app can read it.
@@ -723,12 +883,20 @@ enum ShareSheet {
 
     /// Writes the session to a file named for its date, so it lands with that name.
     static func presentFile(for session: SessionTranscript, format: TranscriptExportFormat) {
+        presentFile(
+            named: TranscriptExport.filename(for: session, format: format),
+            contents: TranscriptExport.render(session, as: format)
+        )
+    }
+
+    /// Writes `contents` to a file called `name`, so it lands with that name.
+    static func presentFile(named name: String, contents: String) {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Export", isDirectory: true)
         try? FileManager.default.removeItem(at: folder)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = folder.appendingPathComponent(TranscriptExport.filename(for: session, format: format))
+        let url = folder.appendingPathComponent(name)
         do {
-            try TranscriptExport.render(session, as: format).write(to: url, atomically: true, encoding: .utf8)
+            try contents.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             return
         }

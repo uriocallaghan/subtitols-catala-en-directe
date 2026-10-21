@@ -23,6 +23,7 @@ struct ContentView: View {
     @EnvironmentObject private var imports: ImportCenter
     @EnvironmentObject private var packs: LanguagePackStore
     @ObservedObject private var shortcuts = ShortcutHost.shared
+    @ObservedObject private var library = TranscriptLibrary.shared
 
     @AppStorage("reading.fontSize") private var storedFontSize = Double(AppVisualMetrics.defaultFontSize)
     @AppStorage("reading.darkTheme") private var isDarkTheme = false
@@ -40,6 +41,29 @@ struct ContentView: View {
 
     @State private var expandedBarItem: SettingsBarItem?
     @State private var showsExport = false
+    /// The export card rises above the bar (Exporta after a stop) rather than under the
+    /// top right glyphs (⌘ E).
+    @State private var exportFromBar = false
+
+    /// The session on screen, kept in the folder the moment listening stopped. While it
+    /// is set the bar offers Descarta, Exporta and Desa.
+    @State private var keptID: UUID?
+    /// A new reading pane each time the text on screen is put away.
+    @State private var paneGeneration = 0
+    @State private var departure: PaneDeparture = .fade
+    /// The words put away, held on screen while they leave (`PaneLeaving`).
+    @State private var leavingWords: LeavingWords?
+    @State private var leaveProgress: CGFloat = 0
+    /// Transcriptions that have landed in the folder, for its bounce.
+    @State private var arrivals = 0
+    /// Where the folder glyph and the live text are in the window, for the text's flight.
+    @State private var folderCenter: CGPoint?
+    @State private var liveTextFrame: CGRect = .zero
+    /// The kept transcriptions, over the whole window like the subtitle editor.
+    @State private var showsLibrary = false
+    @State private var librarySelection: UUID?
+    /// Bumped by ⌘ E while the library is open: its page's card answers.
+    @State private var libraryExportRequests = 0
     @AppStorage("export.format") private var exportFormat: TranscriptExportFormat = .text
     /// While recording, the bar steps aside once the pointer has rested for a moment, so
     /// nothing sits over the live text. Any pointer movement brings it straight back.
@@ -124,7 +148,7 @@ struct ContentView: View {
                 .background(theme.canvas)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Under the editor, VoiceOver reads only the editor.
-                .accessibilityHidden(imports.editor != nil)
+                .accessibilityHidden(imports.editor != nil || showsLibrary)
                 // The panel slides out past the right edge and back in, rather than
                 // blinking; the clip keeps it from sliding over the window's inset.
                 .clipped()
@@ -144,6 +168,10 @@ struct ContentView: View {
                         withAnimation(SettingsBar.motion) { expandedBarItem = nil }
                     } else if controller.state == .needsLanguage {
                         withAnimation(SettingsBar.motion) { expandedBarItem = .language }
+                    } else if keptID != nil, controller.state == .ready {
+                        // The stopped session goes to the folder, where it was already
+                        // kept, and the next one starts.
+                        putAway(.save, thenListen: true)
                     } else {
                         controller.toggleRecording()
                     }
@@ -168,14 +196,30 @@ struct ContentView: View {
                 .accessibilityHidden(!onboarded || imports.editor != nil)
 
                 Group {
-                    settingsBar(themeDarkness: darkness)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, max(14, 22 * scale))
-                        .accessibilityHidden(imports.editor != nil)
-                        .zIndex(2)
+                    // The cards (export, a video's) rise above the bars.
+                    VStack(spacing: 12) {
+                        if showsExport {
+                            exportCard(palette: .blended(darkness: darkness))
+                                .frame(width: 372)
+                                .transition(barCardTransition)
+                        }
+                        if imports.showsPanel, let job = imports.current {
+                            importCard(job, palette: .blended(darkness: darkness))
+                                .frame(width: 372)
+                                .transition(barCardTransition)
+                        }
+                        settingsBar(themeDarkness: darkness)
+                    }
+                    // The two bars, as one piece, centred on the window.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, max(14, 22 * scale))
+                    .accessibilityHidden(imports.editor != nil || showsLibrary)
+                    .animation(.spring(response: 0.38, dampingFraction: 0.86), value: imports.showsPanel)
+                    // Above the clicks that close a card, while one is open.
+                    .zIndex(showsExport || imports.showsPanel ? 4 : 2)
 
                     exportLayer(theme: theme, darkness: darkness, transcriptWidth: transcriptWidth, scale: scale)
-                        .accessibilityHidden(imports.editor != nil)
+                        .accessibilityHidden(imports.editor != nil || showsLibrary)
                         .zIndex(3)
 
                     shortcutCommands
@@ -211,6 +255,20 @@ struct ContentView: View {
                         .transition(editorTransition)
                         .zIndex(5)
                     }
+
+                    if showsLibrary {
+                        MacTranscriptLibraryView(
+                            library: library,
+                            theme: theme,
+                            palette: .blended(darkness: darkness),
+                            leadingInset: max(0, 78 - outerInset),
+                            selection: $librarySelection,
+                            exportRequests: libraryExportRequests,
+                            onClose: closeLibrary
+                        )
+                        .transition(editorTransition)
+                        .zIndex(6)
+                    }
                 }
                 // The bar waits for the first run to finish, then rises in.
                 .opacity(onboarded ? 1 : 0)
@@ -219,19 +277,22 @@ struct ContentView: View {
                 .accessibilityHidden(!onboarded)
                 .animation(.spring(response: 0.7, dampingFraction: 0.9).delay(onboarded ? 0.35 : 0), value: onboarded)
                 .animation(Self.panelMotion, value: imports.editor?.id)
+                .animation(Self.panelMotion, value: showsLibrary)
             }
             .overlay(alignment: .top) { shortcutHelp(theme: theme) }
             .onContinuousHover { phase in
                 if case .active = phase { notePointerActivity() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .coordinateSpace(.named(Self.windowSpace))
             .padding(outerInset)
             .textSelection(.disabled)
         }
         .background(ReadingTheme.blended(darkness: darkness).canvas)
         .ignoresSafeArea()
         .textSelection(.disabled)
-        .frame(minWidth: 820, minHeight: 540)
+        // Wide enough for the expanded settings bar and the side bar beside it.
+        .frame(minWidth: 940, minHeight: 540)
         .onReceive(
             NSWorkspace.shared.notificationCenter.publisher(
                 for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification
@@ -246,6 +307,17 @@ struct ContentView: View {
             guard UserDefaults.standard.bool(forKey: "autoRecord") else { return }
             while !controller.canToggle { try? await Task.sleep(for: .milliseconds(200)) }
             controller.toggleRecording()
+            // `-autoStop S` stops after S seconds of listening, to show what follows a stop.
+            let stopAfter = UserDefaults.standard.double(forKey: "autoStop")
+            guard stopAfter > 0 else { return }
+            try? await Task.sleep(for: .seconds(stopAfter))
+            if controller.isRecording { controller.toggleRecording() }
+        }
+        .task {
+            // `-openLibrary YES` opens the kept transcriptions after launch.
+            guard UserDefaults.standard.bool(forKey: "openLibrary") else { return }
+            try? await Task.sleep(for: .milliseconds(1_200))
+            openLibrary()
         }
         #endif
         #if DEBUG
@@ -337,21 +409,48 @@ struct ContentView: View {
                 wakeBar()
             }
         }
+        .modifier(SessionKeeping(
+            controller: controller,
+            library: library,
+            keptID: $keptID,
+            departure: $departure,
+            onKept: {
+                closeExport()
+                withAnimation(SettingsBar.motion) { expandedBarItem = nil }
+            }
+        ))
     }
 
     // MARK: - Settings bar
 
+    /// The settings bar and, 8 pt to its right, the bar of the video and the kept
+    /// transcriptions: centred together, as one piece.
     private func settingsBar(themeDarkness: Double) -> some View {
-        SettingsBar(
-            controller: controller,
-            expanded: $expandedBarItem,
-            fontSize: $storedFontSize,
-            typeface: $typeface,
-            isDarkTheme: $isDarkTheme,
-            prefersAgeGradient: $prefersAgeGradient,
-            showsDecoration: $showsDecoration,
-            themeDarkness: themeDarkness
-        )
+        HStack(spacing: Self.sideBarGap) {
+            SettingsBar(
+                controller: controller,
+                expanded: $expandedBarItem,
+                fontSize: $storedFontSize,
+                typeface: $typeface,
+                isDarkTheme: $isDarkTheme,
+                prefersAgeGradient: $prefersAgeGradient,
+                showsDecoration: $showsDecoration,
+                themeDarkness: themeDarkness,
+                // A panel opened from the menus shows over the choices until it closes.
+                sessionActions: showsSessionActions && expandedBarItem == nil
+                    ? SessionActions(
+                        consideringDiscard: { considering in
+                            // The text leaves by the way it will take, set before it goes.
+                            if keptID != nil { departure = considering ? .discard : .save }
+                        },
+                        discard: discardKept,
+                        export: { showsExport ? closeExport() : openExport(fromBar: true) },
+                        save: { putAway(.save) }
+                    )
+                    : nil
+            )
+            sideBar(palette: .blended(darkness: themeDarkness))
+        }
         .onHover { barIsHovered = $0 }
         .opacity(barIsResting ? 0 : 1)
         .scaleEffect(barIsResting ? 0.94 : 1, anchor: .bottom)
@@ -409,12 +508,15 @@ struct ContentView: View {
                 transcriptPane(
                     theme: theme,
                     height: height,
-                    committed: controller.committedWords,
-                    provisional: controller.provisionalWords,
-                    fallback: controller.displayText,
-                    isLive: controller.isRecording,
-                    language: controller.rules.id
+                    committed: leavingWords?.committedWords ?? controller.committedWords,
+                    provisional: leavingWords?.provisionalWords ?? controller.provisionalWords,
+                    fallback: leavingWords == nil ? controller.displayText : "",
+                    isLive: leavingWords == nil && controller.isRecording,
+                    language: controller.rules.id,
+                    leaves: true
                 )
+                .modifier(ArrivingPane(delay: paneGeneration == 0 ? nil : 0.04))
+                .id(paneGeneration)
                 .transition(.opacity)
             }
         }
@@ -428,9 +530,11 @@ struct ContentView: View {
         provisional: [StableTranscriptWord],
         fallback: String,
         isLive: Bool,
-        language: String?
+        language: String?,
+        leaves: Bool = false
     ) -> some View {
         let verticalInset = max(72, 147 * min(1, height / designSize.height))
+        let sideInset = max(42, 70 * min(1, height / designSize.height))
         let resolvedFontSize = fontSize(paneHeight: height - verticalInset * 2)
         let bottomInset = AppVisualMetrics.transcriptBottomInset(
             baseInset: verticalInset,
@@ -448,7 +552,20 @@ struct ContentView: View {
             speechLanguage: language
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(.horizontal, max(42, 70 * min(1, height / designSize.height)))
+        // Kept, the text shrinks about the pane's top right corner into the folder glyph
+        // above it; discarded, it dissolves where it stands.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.windowSpace)) } action: { frame in
+            if leaves { liveTextFrame = frame }
+        }
+        // Kept, the text shrinks about its lower right corner into the folder glyph in the
+        // bar beside the main one.
+        .modifier(PaneLeaving(
+            departure: leaves && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? departure : .fade,
+            towards: flightToFolder,
+            progress: leaves ? leaveProgress : 0,
+            anchor: .bottomTrailing
+        ))
+        .padding(.horizontal, sideInset)
         .padding(.top, AppVisualMetrics.transcriptTopInset)
         .padding(.bottom, bottomInset)
         .background(theme.paper)
@@ -473,8 +590,6 @@ struct ContentView: View {
     @ViewBuilder
     private func exportLayer(theme: ReadingTheme, darkness: Double, transcriptWidth: CGFloat, scale: CGFloat) -> some View {
         let palette = SettingsBarPalette.blended(darkness: darkness)
-        let session = exportedSession
-        let hasText = !session.isEmpty
         ZStack(alignment: .topLeading) {
             if showsExport || imports.showsPanel {
                 // Clicks outside the card close it rather than starting a recording.
@@ -483,70 +598,96 @@ struct ContentView: View {
                     .onTapGesture { showsExport ? closeExport() : closeImportPanel() }
                     .transition(.identity)
             }
-            ZStack(alignment: .topTrailing) {
-            HStack(spacing: 0) {
-                ImportGlyph(center: imports, ink: theme.ink) {
-                    toggleImportPanel()
-                }
-                if hasText {
-                    ExportButton(ink: theme.ink, size: 15) {
-                        showsExport ? closeExport() : openExport()
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
-                }
-            }
-            .padding(.top, 2)
-            .padding(.trailing, 8)
-            if showsExport {
-                ExportPanel(
-                    session: session,
-                    palette: palette,
-                    typeface: typeface,
-                    storedFormat: $exportFormat,
-                    actions: [
-                        ExportAction(title: localized("Copia"), symbol: "doc.on.doc", confirmation: localized("Copiat")) { format in
-                            copyExport(format)
-                        },
-                        ExportAction(title: localized("Desa…"), symbol: "arrow.down.doc", isPrimary: true) { format in
-                            saveExport(format)
-                        },
-                    ],
-                    render: exportedText,
-                    onClose: closeExport
-                )
-                .frame(width: 372)
-                .padding(.top, 46)
-                .padding(.trailing, 14)
-                .transition(exportTransition)
-            }
-            if imports.showsPanel, let job = imports.current {
-                ImportPanel(
-                    job: job,
-                    packs: packs,
-                    palette: palette,
-                    finishedActions: [
-                        ExportAction(title: localized("AirDrop"), symbol: "airplayaudio", isPrimary: true) { _ in
-                            sendByAirDrop(job)
-                        },
-                        ExportAction(title: localized("Desa…"), symbol: "arrow.down.doc") { _ in
-                            saveSubtitles(job)
-                        },
-                    ],
-                    onReview: openEditor,
-                    onAnotherVideo: chooseVideo,
-                    onClose: closeImportPanel
-                )
-                .frame(width: 372)
-                .padding(.top, 46)
-                .padding(.trailing, hasText ? 58 : 14)
-                .transition(exportTransition)
-            }
-            }
-            .frame(width: transcriptWidth, alignment: .topTrailing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(Self.panelMotion, value: hasText)
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: imports.showsPanel)
+    }
+
+    // MARK: - Side bar
+
+    private static let sideBarGap: CGFloat = 8
+
+    /// The bar's twin, a few points to its right: the video glyph (with the job's
+    /// progress) and the folder of kept transcriptions, each in a well like the bar's.
+    private func sideBar(palette: SettingsBarPalette) -> some View {
+        HStack(spacing: 5) {
+            ImportGlyph(center: imports, ink: palette.ink, size: 12.5, side: 32, restingOpacity: 0.62) {
+                toggleImportPanel()
+            }
+            .padding(3)
+            .background(Circle().fill(palette.well))
+            .accessibilityLabel(localized("Subtítols d'un vídeo"))
+            LibraryButton(ink: palette.ink, size: 12.5, arrivals: arrivals, restingOpacity: 0.62, side: 32) { openLibrary() }
+                .padding(3)
+                .background(Circle().fill(palette.well))
+                .onGeometryChange(for: CGPoint.self) { proxy in
+                    let frame = proxy.frame(in: .named(Self.windowSpace))
+                    return CGPoint(x: frame.midX, y: frame.midY)
+                } action: { folderCenter = $0 }
+        }
+        .padding(5)
+        .background {
+            Capsule(style: .continuous)
+                .fill(palette.surface)
+                .overlay(Capsule(style: .continuous).strokeBorder(palette.hairline))
+                .shadow(color: palette.shadow, radius: 18, y: 8)
+                .shadow(color: palette.shadow.opacity(0.5), radius: 2, y: 1)
+        }
+        // Gaps between wells belong to the bar, not to the recording surface beneath.
+        .contentShape(Capsule(style: .continuous))
+        .onTapGesture { }
+        .fixedSize()
+    }
+
+    static let windowSpace = "duna.window"
+
+    /// A video's card: language, progress, then its subtitles.
+    private func importCard(_ job: MediaImport, palette: SettingsBarPalette) -> some View {
+        ImportPanel(
+            job: job,
+            packs: packs,
+            palette: palette,
+            finishedActions: [
+                ExportAction(title: localized("AirDrop"), symbol: "airplayaudio", isPrimary: true) { _ in
+                    sendByAirDrop(job)
+                },
+                ExportAction(title: localized("Desa…"), symbol: "arrow.down.doc") { _ in
+                    saveSubtitles(job)
+                },
+            ],
+            onReview: openEditor,
+            onAnotherVideo: chooseVideo,
+            onClose: closeImportPanel
+        )
+    }
+
+    /// Choose a format, see the file, copy it or save it.
+    private func exportCard(palette: SettingsBarPalette) -> some View {
+        ExportPanel(
+            session: exportedSession,
+            palette: palette,
+            typeface: typeface,
+            storedFormat: $exportFormat,
+            actions: [
+                ExportAction(title: localized("Copia"), symbol: "doc.on.doc", confirmation: localized("Copiat")) { format in
+                    copyExport(format)
+                },
+                ExportAction(title: localized("Desa…"), symbol: "arrow.down.doc", isPrimary: true) { format in
+                    saveExport(format)
+                },
+            ],
+            render: exportedText,
+            onClose: closeExport
+        )
+    }
+
+    private var barCardTransition: AnyTransition {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .opacity
+                .combined(with: .scale(scale: 0.9, anchor: .bottom))
+                .combined(with: .offset(y: 8)),
+            removal: .opacity.combined(with: .scale(scale: 0.96, anchor: .bottom))
+        )
     }
 
     /// What the export card sends: the video's text once it is done, else the session.
@@ -693,14 +834,24 @@ struct ContentView: View {
     }
 
     private func openExport() {
-        // Over the editor, its own card (video or subtitles) answers.
+        openExport(fromBar: true)
+    }
+
+    private func openExport(fromBar: Bool) {
+        // Over the editor or the library, their own card answers.
         if let editor = imports.editor {
             editor.requestExport()
+            return
+        }
+        if showsLibrary {
+            libraryExportRequests += 1
             return
         }
         guard !exportedSession.isEmpty else { return }
         withAnimation(SettingsBar.motion) { expandedBarItem = nil }
         closeImportPanel()
+        if showsExport { closeExport() }
+        exportFromBar = fromBar
         withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { showsExport = true }
     }
 
@@ -709,6 +860,13 @@ struct ContentView: View {
     }
 
     private func copyExport(_ format: TranscriptExportFormat) {
+        if showsLibrary {
+            guard let id = librarySelection, let transcript = library.transcript(id) else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(transcript.render(format), forType: .string)
+            return
+        }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(exportedText(format), forType: .string)
@@ -723,6 +881,11 @@ struct ContentView: View {
     }
 
     private func saveExport(_ format: TranscriptExportFormat) {
+        if showsLibrary {
+            guard let id = librarySelection, let transcript = library.transcript(id) else { return }
+            MacTranscriptLibraryView.save(transcript, as: format, text: transcript.render(format))
+            return
+        }
         let session = exportedSession
         let text = exportedText(format)
         let panel = NSSavePanel()
@@ -756,8 +919,10 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.space, modifiers: [])
                 .disabled(!controller.canToggle || imports.current?.isWorking == true || imports.editor != nil
-                          || expandedBarItem == .vocabulary)
-            if showsExport {
+                          || expandedBarItem == .vocabulary || showsLibrary)
+            if showsLibrary {
+                // The library answers Esc itself.
+            } else if showsExport {
                 Button(localized("Tanca l'exportació")) { closeExport() }
                     .buttonStyle(.plain)
                     .keyboardShortcut(.cancelAction)
@@ -784,7 +949,7 @@ struct ContentView: View {
             isReady: onboarded,
             canToggleRecording: onboarded && controller.canToggle && !videoIsWorking && imports.editor == nil,
             toggleRecording: toggleRecordingFromKeyboard,
-            hasText: onboarded && !exportedSession.isEmpty,
+            hasText: onboarded && (showsLibrary ? librarySelection != nil : !exportedSession.isEmpty),
             openExport: openExport,
             save: saveExport,
             copy: copyExport,
@@ -794,6 +959,9 @@ struct ContentView: View {
             canReviewSubtitles: onboarded && imports.current?.phase == .finished && imports.current?.session.isEmpty == false,
             reviewSubtitles: openEditor,
             editor: imports.editor,
+            editsText: showsLibrary,
+            canOpenLibrary: onboarded && imports.editor == nil,
+            openLibrary: { showsLibrary ? closeLibrary() : openLibrary() },
             openPanel: openBarPanel,
             showShortcuts: revealShortcutHelp
         )
@@ -814,7 +982,85 @@ struct ContentView: View {
             dismissVideo { controller.toggleRecording() }
             return
         }
+        if keptID != nil, controller.state == .ready {
+            putAway(.save, thenListen: true)
+            return
+        }
         controller.toggleRecording()
+    }
+
+    // MARK: - Kept transcriptions
+
+    /// From the live text's lower right corner to the folder glyph.
+    private var flightToFolder: CGSize {
+        guard let folderCenter, liveTextFrame != .zero else { return CGSize(width: 0, height: 80) }
+        return CGSize(width: folderCenter.x - liveTextFrame.maxX, height: folderCenter.y - liveTextFrame.maxY)
+    }
+
+    /// Descarta · Exporta · Desa, while a stopped session is on screen.
+    private var showsSessionActions: Bool {
+        keptID != nil && controller.state == .ready && imports.current == nil && onboarded
+    }
+
+    /// The text on screen leaves (for the folder, or dissolving when discarded); once it
+    /// has gone a new pane fades in with the prompt, or with the next session.
+    private func putAway(_ kind: PaneDeparture, thenListen: Bool = false) {
+        guard keptID != nil else { return }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        departure = kind
+        closeExport()
+        leavingWords = LeavingWords(
+            committedWords: controller.committedWords,
+            provisionalWords: controller.provisionalWords
+        )
+        controller.clearTranscript()
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.22) : SettingsBar.motion) { keptID = nil }
+        let paneMotion: Animation = reduceMotion
+            ? .easeInOut(duration: 0.3)
+            : (kind == .discard ? .easeIn(duration: 0.36) : .spring(response: 0.62, dampingFraction: 0.94))
+        withAnimation(paneMotion) {
+            leaveProgress = 1
+        } completion: {
+            var quiet = Transaction()
+            quiet.disablesAnimations = true
+            withTransaction(quiet) {
+                leavingWords = nil
+                leaveProgress = 0
+                paneGeneration += 1
+                if keptID == nil { departure = .fade }
+            }
+        }
+        if kind == .save {
+            // The folder answers as the text reaches it.
+            Task {
+                try? await Task.sleep(for: .milliseconds(reduceMotion ? 120 : 380))
+                arrivals += 1
+                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            }
+        }
+        if thenListen { controller.toggleRecording() }
+    }
+
+    private func discardKept() {
+        guard let keptID else { return }
+        putAway(.discard)
+        library.remove(keptID)
+    }
+
+    private func openLibrary() {
+        guard onboarded, imports.editor == nil else { return }
+        closeExport()
+        closeImportPanel()
+        withAnimation(SettingsBar.motion) { expandedBarItem = nil }
+        // The session just kept opens first, else the last one read.
+        if let keptID { librarySelection = keptID }
+        withAnimation(Self.panelMotion) { showsLibrary = true }
+    }
+
+    private func closeLibrary() {
+        library.flush()
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        withAnimation(Self.panelMotion) { showsLibrary = false }
     }
 
     /// Gives the pane back to listening; a video whose corrections have not left the app
@@ -897,6 +1143,7 @@ struct ContentView: View {
                 shortcutRow("⌘ G", localized("Degradat per antiguitat"))
                 shortcutRow("⌘ \\", localized("Panell decoratiu"))
                 shortcutRow("⌘ E", localized("Exporta el text"))
+                shortcutRow("⇧ ⌘ T", localized("Transcripcions"))
                 shortcutRow("⌘ O", localized("Subtítols d'un vídeo"))
                 shortcutRow("⌘ S", localized("Desa el text"))
                 shortcutRow("⌘ C", localized("Copia el text"))
@@ -932,28 +1179,36 @@ struct ContentView: View {
 private struct ImportGlyph: View {
     @ObservedObject var center: ImportCenter
     let ink: Color
+    var size: CGFloat = 15
+    var side: CGFloat = 44
+    var restingOpacity = 0.34
     let action: () -> Void
 
     var body: some View {
         if let job = center.current {
-            JobGlyph(job: job, ink: ink, action: action)
+            JobGlyph(job: job, ink: ink, size: size, side: side, restingOpacity: restingOpacity, action: action)
         } else {
-            ImportButton(ink: ink, size: 15, action: action)
+            ImportButton(ink: ink, size: size, restingOpacity: restingOpacity, side: side, action: action)
         }
     }
 
     private struct JobGlyph: View {
         @ObservedObject var job: MediaImport
         let ink: Color
+        let size: CGFloat
+        let side: CGFloat
+        let restingOpacity: Double
         let action: () -> Void
 
         var body: some View {
             TimelineView(.animation(minimumInterval: 1 / 30, paused: !job.isWorking || job.isPaused)) { context in
                 ImportButton(
                     ink: ink,
-                    size: 15,
+                    size: size,
                     progress: job.isWorking ? (job.phase == .preparing ? 0 : job.displayedFraction(at: context.date)) : nil,
                     isFinished: job.phase == .finished,
+                    restingOpacity: restingOpacity,
+                    side: side,
                     action: action
                 )
             }
@@ -1033,5 +1288,52 @@ private final class DecorationLevelSource {
 
     func discardPendingVoicePeak() {
         if job == nil { controller?.discardPendingVoicePeak() }
+    }
+}
+
+/// Keeps every live session that stops with words, the moment it stops, so nothing is
+/// lost whatever the reader does next; the bar then offers what to do with it. Its own
+/// modifier, so the window's long chain of handlers stays within the type checker.
+private struct SessionKeeping: ViewModifier {
+    @ObservedObject var controller: SubtitleController
+    @ObservedObject var library: TranscriptLibrary
+    @EnvironmentObject private var imports: ImportCenter
+    @Binding var keptID: UUID?
+    @Binding var departure: PaneDeparture
+    let onKept: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: controller.state) { old, new in
+                if new == .requestingPermission || new == .recording, keptID != nil {
+                    withAnimation(SettingsBar.motion) { keptID = nil }
+                    departure = .fade
+                }
+                guard old == .transcribing, new != .transcribing, imports.current == nil,
+                      !controller.session.isEmpty else { return }
+                let id = library.keep(controller.session, languageID: controller.rules.id)
+                guard new == .ready else { return }
+                onKept()
+                departure = .save
+                let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.25) : SettingsBar.motion) { keptID = id }
+            }
+            // A new language is a new controller, with nothing on screen.
+            .onChange(of: ObjectIdentifier(controller)) { _, _ in
+                keptID = nil
+                departure = .fade
+            }
+            // The session on screen, deleted from the library, has nothing left to keep.
+            .onChange(of: library.listings.map(\.id)) { _, ids in
+                guard let keptID, !ids.contains(keptID) else { return }
+                withAnimation(SettingsBar.motion) { self.keptID = nil }
+                departure = .fade
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+                library.flush()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                library.flush()
+            }
     }
 }

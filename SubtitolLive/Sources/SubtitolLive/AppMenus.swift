@@ -20,6 +20,10 @@ struct WindowCommands {
     var reviewSubtitles: () -> Void
     /// The subtitle editor, while it is open: Edit works on its text.
     var editor: SubtitleEditorModel?
+    /// The kept transcriptions are open: Edit works on the text being written.
+    var editsText: Bool
+    var canOpenLibrary: Bool
+    var openLibrary: () -> Void
     /// Opens one of the settings bar's panels, as clicking it would.
     var openPanel: (SettingsBarItem) -> Void
     var showShortcuts: () -> Void
@@ -78,6 +82,11 @@ struct SubtitolCommands: Commands {
             Button(localized("Revisa els subtítols")) { window?.reviewSubtitles() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(window?.canReviewSubtitles != true || window?.editor != nil)
+            Button(window?.editsText == true ? localized("Tanca les transcripcions") : localized("Transcripcions")) {
+                window?.openLibrary()
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(window?.canOpenLibrary != true)
             Divider()
             Button(localized("Exporta el text…")) { window?.openExport() }
                 .keyboardShortcut("e", modifiers: .command)
@@ -97,6 +106,12 @@ struct SubtitolCommands: Commands {
 
         // Edició: the text on screen cannot be selected, so copying takes all of it.
         CommandGroup(replacing: .undoRedo) {
+            if window?.editsText == true, window?.editor == nil {
+                Button(localized("Desfés")) { _ = Self.sendToText(Selector(("undo:"))) }
+                    .keyboardShortcut("z", modifiers: .command)
+                Button(localized("Refés")) { _ = Self.sendToText(Selector(("redo:"))) }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
             if let editor = window?.editor {
                 // Typing in a line undoes the typing; otherwise a whole correction.
                 Button(localized("Desfés")) {
@@ -110,7 +125,7 @@ struct SubtitolCommands: Commands {
             }
         }
         CommandGroup(replacing: .pasteboard) {
-            if window?.editor != nil {
+            if window?.editor != nil || window?.editsText == true {
                 Button(localized("Retalla")) { _ = Self.sendToText(#selector(NSText.cut(_:))) }
                     .keyboardShortcut("x", modifiers: .command)
                 Button(localized("Copia")) {
@@ -123,7 +138,7 @@ struct SubtitolCommands: Commands {
                     .keyboardShortcut("a", modifiers: .command)
                 Divider()
             }
-            if window?.editor == nil {
+            if window?.editor == nil, window?.editsText != true {
                 Button(localized("Copia el text")) { window?.copy(.text) }
                     .keyboardShortcut("c", modifiers: .command)
                     .disabled(window?.hasText != true)

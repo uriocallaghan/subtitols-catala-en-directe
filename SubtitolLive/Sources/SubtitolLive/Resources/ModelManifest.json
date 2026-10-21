@@ -337,6 +337,6 @@
     }
   ],
   "packMirror": {
-    "notes": "languages[].mirror: the .aar written by stage-ios-resources.sh --asset-packs (the file uploaded to App Store Connect), published as a GitHub release asset. The app fetches it only when the App Store's pack fails or stalls, verifies the SHA-256 of the whole archive, then unpacks Contents/<id>. The Mac App Store app bundles every language (Languages/<id>), the iPhone app bundles English; those never download. Re-run --asset-packs, then update sha256 and bytes here and upload the new .aar to the release, whenever a pack changes."
+    "notes": "languages[].mirror: the .aar written by stage-ios-resources.sh --asset-packs (the file uploaded to App Store Connect), published as a GitHub release asset. The app fetches it only when the App Store's pack fails or stalls, verifies the SHA-256 of the whole archive, then unpacks Contents/<id>. Neither app bundles a language (BUNDLED_LANGUAGES is empty); a bundled one would never download. Re-run --asset-packs, then update sha256 and bytes here and upload the new .aar to the release, whenever a pack changes."
   }
 }

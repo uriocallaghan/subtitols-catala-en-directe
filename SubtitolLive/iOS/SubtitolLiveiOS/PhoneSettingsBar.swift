@@ -62,6 +62,8 @@ struct PhoneSettingsBar: View {
     let onMicrophone: () -> Void
     let onVocabulary: () -> Void
     let onAbout: () -> Void
+    /// After a stop, the bar's choices for the session on screen; nil the rest of the time.
+    var sessionActions: SessionActions?
 
     static let motion = Animation.spring(response: 0.36, dampingFraction: 0.86)
     static let selection = Animation.spring(response: 0.26, dampingFraction: 0.82)
@@ -76,6 +78,8 @@ struct PhoneSettingsBar: View {
     /// The interface language: its change re-renders the words below.
     @Environment(\.locale) private var locale
     @Namespace private var namespace
+    /// Descarta asks first, from the button itself.
+    @State private var confirmsDiscard = false
     /// The closed bar's natural width, read while it is closed.
     @State private var closedWidth: CGFloat = 0
 
@@ -84,6 +88,12 @@ struct PhoneSettingsBar: View {
     private var openWidth: CGFloat {
         min(maxWidth, max(closedWidth, Self.openMinimumWidth))
     }
+
+    /// The stopped session's choices are showing in place of the settings.
+    private var showsActions: Bool { sessionActions != nil }
+
+    /// Nothing open and no session waiting: the bar's own glyphs are showing.
+    private var isIdle: Bool { expanded == nil && !showsActions }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -102,13 +112,15 @@ struct PhoneSettingsBar: View {
                         .font(.system(size: 15, weight: .semibold))
                 }
             }
+            actionWell(.discard)
+            actionWell(.export)
             endWell
         }
         .padding(Self.barPadding)
-        .frame(width: expanded == nil ? nil : openWidth, height: Self.knob + 2 * (Self.wellPadding + Self.barPadding))
+        .frame(width: isIdle ? nil : openWidth, height: Self.knob + 2 * (Self.wellPadding + Self.barPadding))
         .fixedSize()
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            if expanded == nil { closedWidth = width }
+            if isIdle { closedWidth = width }
         }
         .background { surface }
         // The bar has to fit across the phone at any text size.
@@ -129,7 +141,7 @@ struct PhoneSettingsBar: View {
     /// shows the setting's control; while another setting is open it shrinks to nothing.
     private func slot<Glyph: View>(_ item: PhoneBarItem, @ViewBuilder glyph: () -> Glyph) -> some View {
         let isOpen = expanded == item
-        let isGone = expanded != nil && !isOpen
+        let isGone = (expanded != nil && !isOpen) || showsActions
         return ZStack {
             glyph()
                 .modifier(TouchDownAction(
@@ -147,12 +159,12 @@ struct PhoneSettingsBar: View {
                 // It leaves at once and comes back once the control has gone.
                 .animation(fadeMotion) { glyph in
                     glyph
-                        .opacity(expanded == nil ? 1 : 0)
-                        .scaleEffect(expanded == nil || reduceMotion ? 1 : 0.7)
-                        .blur(radius: expanded == nil || reduceMotion ? 0 : 2)
+                        .opacity(isIdle ? 1 : 0)
+                        .scaleEffect(isIdle || reduceMotion ? 1 : 0.7)
+                        .blur(radius: isIdle || reduceMotion ? 0 : 2)
                 }
-                .allowsHitTesting(expanded == nil)
-                .accessibilityHidden(expanded != nil)
+                .allowsHitTesting(isIdle)
+                .accessibilityHidden(!isIdle)
 
             if isOpen {
                 control(for: item)
@@ -196,7 +208,7 @@ struct PhoneSettingsBar: View {
     /// Fades out fast, fades back in just after the wells have started to reopen.
     private var fadeMotion: Animation {
         if reduceMotion { return .easeInOut(duration: 0.2) }
-        return expanded == nil
+        return isIdle
             ? .easeOut(duration: 0.22).delay(0.08)
             : .easeOut(duration: 0.1)
     }
@@ -237,12 +249,18 @@ struct PhoneSettingsBar: View {
         .accessibilityLabel(PhoneBarItem.size.title)
     }
 
-    /// Record while the bar is closed, close while a setting is open: the same well, so
-    /// the way out is where the thumb already is.
+    /// Record while the bar is closed, close while a setting is open, Desa after a stop:
+    /// the same well, so the way out is where the thumb already is. For Desa it stretches
+    /// to its share of the bar and fills with ink, the bar's one primary action.
     private var endWell: some View {
         let isOpen = expanded != nil
+        let isSave = showsActions
         return Button {
-            if !isOpen { controller.toggleRecording() }
+            if isSave {
+                sessionActions?.save()
+            } else if !isOpen {
+                controller.toggleRecording()
+            }
         } label: {
             ZStack {
                 RecordGlyph(
@@ -250,8 +268,9 @@ struct PhoneSettingsBar: View {
                     isBusy: !controller.canToggle,
                     palette: palette
                 )
-                .opacity(isOpen ? 0 : 1)
-                .scaleEffect(isOpen && !reduceMotion ? 0.6 : 1)
+                .frame(width: Self.knob, height: Self.knob)
+                .opacity(isOpen || isSave ? 0 : 1)
+                .scaleEffect((isOpen || isSave) && !reduceMotion ? 0.6 : 1)
                 ZStack {
                     Circle()
                         .fill(palette.knob)
@@ -261,13 +280,24 @@ struct PhoneSettingsBar: View {
                         .foregroundStyle(palette.ink)
                         .rotationEffect(.degrees(isOpen || reduceMotion ? 0 : -90))
                 }
+                .frame(width: Self.knob, height: Self.knob)
                 .opacity(isOpen ? 1 : 0)
                 .scaleEffect(isOpen || reduceMotion ? 1 : 0.6)
+                if isSave {
+                    actionLabel(.save, ink: palette.surface)
+                        .modifier(BarEntrance(index: 2))
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .opacity.animation(.easeOut(duration: 0.12))
+                        ))
+                }
             }
-            .frame(width: Self.knob, height: Self.knob)
+            .frame(width: isSave ? nil : Self.knob, height: Self.knob)
+            .frame(maxWidth: isSave ? .infinity : nil)
             .padding(Self.wellPadding)
-            .background(Circle().fill(palette.well))
-            .contentShape(Circle())
+            .background(Capsule(style: .continuous).fill(isSave ? palette.ink : palette.well))
+            .clipShape(Capsule(style: .continuous))
+            .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(PressableButtonStyle())
         // While a setting is open the well closes it as the finger lands. The layer
@@ -280,16 +310,19 @@ struct PhoneSettingsBar: View {
                     .modifier(TouchDownAction(label: endWellLabel, inputLabels: [localized("Tanca")], symbol: "xmark") { close() })
             }
         }
-        .disabled(!isOpen && !controller.canToggle)
+        .disabled(!isOpen && !isSave && !controller.canToggle)
         .sensoryFeedback(.impact(weight: .medium), trigger: controller.isRecording)
         .accessibilityShowsLargeContentViewer {
-            Label(endWellLabel, systemImage: isOpen ? "xmark" : (controller.isRecording ? "stop.fill" : "record.circle"))
+            Label(endWellLabel, systemImage: isSave
+                ? SessionAction.save.symbol
+                : (isOpen ? "xmark" : (controller.isRecording ? "stop.fill" : "record.circle")))
         }
         .accessibilityLabel(endWellLabel)
         .accessibilityInputLabels(endWellSpokenNames)
     }
 
     private var endWellSpokenNames: [String] {
+        if showsActions { return SessionAction.save.spokenNames }
         if expanded != nil { return [localized("Tanca"), endWellLabel] }
         return controller.isRecording
             ? [localized("Atura"), localized("Para")]
@@ -297,9 +330,77 @@ struct PhoneSettingsBar: View {
     }
 
     private var endWellLabel: String {
+        if showsActions { return SessionAction.save.accessibilityLabel }
         if let expanded { return expanded.closeTitle }
         guard controller.canToggle else { return controller.detail }
         return controller.isRecording ? localized("Atura") : localized("Comença a transcriure")
+    }
+
+    // MARK: - After a stop
+
+    /// Descarta and Exporta: wells that grow out of nothing where the settings were, as a
+    /// setting's well grows, while the record well becomes Desa beside them.
+    private func actionWell(_ action: SessionAction) -> some View {
+        let isShown = showsActions
+        return ZStack {
+            if isShown {
+                Button {
+                    switch action {
+                    case .discard:
+                        sessionActions?.consideringDiscard(true)
+                        confirmsDiscard = true
+                    case .export: sessionActions?.export()
+                    case .save: sessionActions?.save()
+                    }
+                } label: {
+                    actionLabel(action, ink: palette.ink.opacity(0.82))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(PressableButtonStyle())
+                .modifier(BarEntrance(index: action == .discard ? 0 : 1))
+                .transition(.asymmetric(
+                    insertion: .identity,
+                    removal: .opacity.animation(.easeOut(duration: 0.12))
+                ))
+                .accessibilityShowsLargeContentViewer {
+                    Label(action.title, systemImage: action.symbol)
+                }
+                .accessibilityLabel(action.accessibilityLabel)
+                .accessibilityInputLabels(action.spokenNames)
+                .modifier(DiscardQuestion(isActive: action == .discard, isPresented: $confirmsDiscard) {
+                    sessionActions?.discard()
+                } dismissed: {
+                    sessionActions?.consideringDiscard(false)
+                })
+            }
+        }
+        .frame(width: isShown ? nil : 0, height: Self.knob + 2 * Self.wellPadding)
+        .frame(maxWidth: isShown ? .infinity : nil)
+        .background(Capsule(style: .continuous).fill(palette.well))
+        .clipShape(Capsule(style: .continuous))
+        .animation(fadeMotion) { well in
+            well
+                .opacity(isShown ? 1 : 0)
+                .scaleEffect(isShown || reduceMotion ? 1 : 0.7)
+        }
+        .padding(.trailing, isShown ? Self.spacing : 0)
+        .allowsHitTesting(isShown)
+        .accessibilityHidden(!isShown)
+    }
+
+    /// A glyph and a word, kept at their own size whatever the well does.
+    private func actionLabel(_ action: SessionAction, ink: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: action.symbol)
+                .font(.system(size: 13, weight: .semibold))
+            Text(action.title)
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(ink)
+        .fixedSize()
+        .padding(.horizontal, 10)
     }
 
     @ViewBuilder
@@ -612,10 +713,48 @@ struct PhoneSettingsBar: View {
     }
 }
 
+/// "Vols descartar…?" rising from the Descarta button.
+private struct DiscardQuestion: ViewModifier {
+    let isActive: Bool
+    @Binding var isPresented: Bool
+    let confirmed: () -> Void
+    let dismissed: () -> Void
+
+    @State private var didConfirm = false
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content
+                .confirmationDialog(
+                    localized("Vols descartar aquesta transcripció?"),
+                    isPresented: $isPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button(localized("Descarta"), role: .destructive) {
+                        didConfirm = true
+                        confirmed()
+                    }
+                    Button(localized("Cancel·la"), role: .cancel) {}
+                } message: {
+                    Text(localized("No es desarà a Transcripcions i no es podrà recuperar."))
+                }
+                .onChange(of: isPresented) { _, shown in
+                    if shown {
+                        didConfirm = false
+                    } else if !didConfirm {
+                        dismissed()
+                    }
+                }
+        } else {
+            content
+        }
+    }
+}
+
 /// Acts the moment the finger lands instead of when it lifts, as a key does: the bar's
 /// wells answer with no wait. The press dips the well a little, like `PressableButtonStyle`.
 /// `GestureState` resets on its own if the touch is cancelled, so nothing stays pressed.
-private struct TouchDownAction: ViewModifier {
+struct TouchDownAction: ViewModifier {
     let label: String
     var inputLabels: [String] = []
     var symbol: String?
@@ -646,7 +785,7 @@ private struct TouchDownAction: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     /// The bar keeps its size at the largest text sizes; a long press on a control shows
     /// it large, as the system's own tab bars do.
     func largeContent(_ title: String, symbol: String) -> some View {
@@ -675,7 +814,7 @@ private struct ScrollEdges: Equatable {
 
 /// A control's pieces arrive one after another, drifting in from the close button's side
 /// and sharpening as they land.
-private struct BarEntrance: ViewModifier {
+struct BarEntrance: ViewModifier {
     let index: Int
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -705,6 +844,9 @@ private struct BarEntrance: ViewModifier {
 struct PhoneSizeTrack: View {
     @Binding var value: Double
     let palette: SettingsBarPalette
+    /// The reading screen's sizes unless told otherwise (a kept transcription's are smaller).
+    var range: ClosedRange<Double> = Double(PhoneMetrics.minimumFontSize)...Double(PhoneMetrics.maximumFontSize)
+    var step = Double(PhoneMetrics.fontSizeStep)
 
     @State private var dragFraction: Double?
     /// The last quarter-step the finger crossed, for the fine ticks.
@@ -712,19 +854,26 @@ struct PhoneSizeTrack: View {
     @State private var pressedEnd = false
     private let knob: CGFloat = 22
 
-    private static var lower: Double { Double(PhoneMetrics.minimumFontSize) }
-    private static var upper: Double { Double(PhoneMetrics.maximumFontSize) }
-    private static var step: Double { Double(PhoneMetrics.fontSizeStep) }
-    private var stops: Int { Int(((Self.upper - Self.lower) / Self.step).rounded()) + 1 }
+    private var lower: Double { range.lowerBound }
+    private var upper: Double { range.upperBound }
+    private var stops: Int { Int(((upper - lower) / step).rounded()) + 1 }
 
     static func fraction(of size: Double) -> Double {
-        (min(upper, max(lower, size)) - lower) / (upper - lower)
+        fraction(of: size, in: Double(PhoneMetrics.minimumFontSize)...Double(PhoneMetrics.maximumFontSize))
+    }
+
+    static func fraction(of size: Double, in range: ClosedRange<Double>) -> Double {
+        (min(range.upperBound, max(range.lowerBound, size)) - range.lowerBound) / (range.upperBound - range.lowerBound)
+    }
+
+    private func fraction(of size: Double) -> Double {
+        Self.fraction(of: size, in: range)
     }
 
     var body: some View {
         GeometryReader { proxy in
             let usable = max(1, proxy.size.width - knob)
-            let settled = Self.fraction(of: value)
+            let settled = fraction(of: value)
             // While dragging, the knob sits between the finger and its size.
             let shown = dragFraction.map { $0 * 0.75 + settled * 0.25 } ?? settled
             let center = knob / 2 + usable * shown
@@ -772,8 +921,8 @@ struct PhoneSizeTrack: View {
         .accessibilityLabel(localized("Mida del text"))
         .accessibilityValue(localized("\(Int(value)) punts"))
         .accessibilityAdjustableAction { direction in
-            let delta = direction == .increment ? Self.step : -Self.step
-            value = Double(PhoneMetrics.clampedFontSize(CGFloat(value + delta)))
+            let delta = direction == .increment ? step : -step
+            value = min(upper, max(lower, value + delta))
         }
     }
 
@@ -783,14 +932,14 @@ struct PhoneSizeTrack: View {
         let position = min(1, max(0, raw))
         dragFraction = position
 
-        let span = Self.upper - Self.lower
+        let span = upper - lower
         // Four fine ticks per size.
-        let grain = Int((position * span / Self.step * 4).rounded(.down))
-        let snapped = Self.lower + (position * span / Self.step).rounded() * Self.step
+        let grain = Int((position * span / step * 4).rounded(.down))
+        let snapped = lower + (position * span / step).rounded() * step
 
         if snapped != value {
             withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) { value = snapped }
-            haptics.detent(fraction: Self.fraction(of: snapped))
+            haptics.detent(fraction: fraction(of: snapped))
         } else if let lastGrain, grain != lastGrain {
             haptics.grain()
         }

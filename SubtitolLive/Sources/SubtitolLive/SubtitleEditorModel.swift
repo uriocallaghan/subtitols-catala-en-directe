@@ -48,10 +48,17 @@ final class SubtitleEditorModel: ObservableObject, Identifiable {
     @Published private(set) var canRedo = false
     @Published private(set) var renderer: CaptionRenderer
     @Published private(set) var videoExport: VideoExport = .idle
-    /// The finished copy went to the photo library (iPhone).
-    @Published private(set) var savedToPhotos = false
-    /// Why the copy could not go to the photo library; the copy itself stays ready.
-    @Published private(set) var photosError: String?
+    /// Where the finished copy stands with the photo library (iPhone): it goes there by
+    /// itself as soon as it is made, so nobody has to find a button for it.
+    @Published private(set) var photos: PhotosSave = .idle
+
+    enum PhotosSave: Equatable {
+        case idle
+        case saving
+        case saved
+        /// The copy itself stays ready; `denied` means only Settings can let it in.
+        case failed(String, denied: Bool)
+    }
 
     /// How the captions look, as chosen in the editor; remembered for the next video.
     @Published private(set) var style: CaptionStyle
@@ -611,8 +618,7 @@ final class SubtitleEditorModel: ObservableObject, Identifiable {
         guard canExportVideo else { return }
         if case .rendering = videoExport { return }
         pause()
-        savedToPhotos = false
-        photosError = nil
+        photos = .idle
         videoExport = .rendering(0)
         let source = job.source
         let renderer = CaptionRenderer(document: document, style: style)
@@ -634,6 +640,9 @@ final class SubtitleEditorModel: ObservableObject, Identifiable {
                 try Task.checkCancellation()
                 guard let self, self.exportGeneration == generation else { return }
                 self.videoExport = .finished(destination)
+                #if os(iOS)
+                self.saveToPhotos()
+                #endif
             } catch {
                 try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
                 guard let self, !Task.isCancelled, self.exportGeneration == generation else { return }
@@ -693,24 +702,30 @@ final class SubtitleEditorModel: ObservableObject, Identifiable {
 
     #if os(iOS)
     /// Adds the finished copy to the photo library, asking only for permission to add.
+    /// Runs by itself when the copy is made; the card's button only retries a failure.
     func saveToPhotos() {
         guard case .finished(let url) = videoExport else { return }
-        photosError = nil
+        if photos == .saving || photos == .saved { return }
+        photos = .saving
+        let generation = exportGeneration
         Task {
             let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard generation == exportGeneration else { return }
             guard status == .authorized || status == .limited else {
-                photosError = localized("Per desar el vídeo, permet que duna afegeixi fotos a Configuració.")
+                photos = .failed(localized("Per desar el vídeo, permet que duna afegeixi fotos a Configuració."), denied: true)
                 return
             }
             do {
                 try await PHPhotoLibrary.shared().performChanges {
                     PHAssetCreationRequest.creationRequestForAssetFromVideo(atFileURL: url)
                 }
-                savedToPhotos = true
-                photosError = nil
+                guard generation == exportGeneration else { return }
+                photos = .saved
                 job.markExported()
+                UIAccessibility.post(notification: .announcement, argument: localized("Desat a Fotos"))
             } catch {
-                photosError = localized("No s'ha pogut desar el vídeo a Fotos. Torna-ho a provar.")
+                guard generation == exportGeneration else { return }
+                photos = .failed(localized("No s'ha pogut desar el vídeo a Fotos. Torna-ho a provar."), denied: false)
             }
         }
     }

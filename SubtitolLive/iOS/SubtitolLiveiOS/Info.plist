@@ -71,6 +71,8 @@
 	<string>duna escolta la veu per convertir-la en text al mateix iPhone. L'àudio no surt mai del telèfon.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>duna desa a Fotos els vídeos amb subtítols que facis.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>duna només afegeix a Fotos els vídeos amb subtítols que facis. No llegeix mai la teva fototeca; els vídeos que tries arriben pel selector del sistema.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

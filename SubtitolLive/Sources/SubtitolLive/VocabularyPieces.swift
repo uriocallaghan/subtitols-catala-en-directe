@@ -69,6 +69,8 @@ struct VocabularyCloud: View {
     var fieldSize: CGFloat = 12
     let onAdd: (String) -> Bool
     let onRemove: (String) -> Void
+    /// Esc while typing (Mac): the field takes the key, so the card closes from here.
+    var onCancel: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draft = ""
@@ -129,6 +131,9 @@ struct VocabularyCloud: View {
                 .foregroundStyle(palette.ink)
                 .focused($fieldFocused)
                 .onSubmit(add)
+                #if os(macOS)
+                .onExitCommand { onCancel?() }
+                #endif
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 .submitLabel(.done)
